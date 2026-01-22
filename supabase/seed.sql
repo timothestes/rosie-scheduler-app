@@ -1,4 +1,4 @@
--- Rosie Scheduler Database Schema
+-- Schedule a Lesson with Rosie Database Schema
 -- Run this in your Supabase SQL Editor
 
 -- Enable UUID extension

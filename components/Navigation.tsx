@@ -56,7 +56,7 @@ export default function Navigation({ role, userEmail }: NavigationProps) {
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link href={role === 'admin' ? '/admin' : '/schedule'} className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
-                Rosie Scheduler
+                Schedule a Lesson with Rosie
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">

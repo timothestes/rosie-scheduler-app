@@ -1,26 +1,32 @@
 import { signInWithGoogle } from "./actions"
+import DarkModeToggle from "@/components/DarkModeToggle"
 
 export default async function Login({ searchParams }: { searchParams: Promise<{ message: string }> }) {
   const params = await searchParams
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center p-4">
+      {/* Dark Mode Toggle */}
+      <div className="absolute top-4 right-4">
+        <DarkModeToggle />
+      </div>
+
       <div className="w-full max-w-md">
         {/* Logo/Title */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-indigo-600">Rosie Scheduler</h1>
-          <p className="text-gray-600 mt-2">Book your lessons with ease</p>
+          <h1 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">Schedule a Lesson with Rosie</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">Book your lessons online!</p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h2 className="text-xl font-semibold text-gray-900 text-center mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg dark:shadow-gray-900/50 p-8 border border-transparent dark:border-gray-700">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white text-center mb-6">
             Sign in to continue
           </h2>
 
           <form>
             <button
               formAction={signInWithGoogle}
-              className="w-full bg-white text-gray-700 border border-gray-300 rounded-lg px-4 py-3 flex items-center justify-center gap-3 hover:bg-gray-50 hover:border-gray-400 transition-all shadow-sm"
+              className="w-full bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 flex items-center justify-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-all shadow-sm"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -33,14 +39,14 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
           </form>
 
           {params?.message && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-700 text-center text-sm">{params.message}</p>
+            <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-red-700 dark:text-red-300 text-center text-sm">{params.message}</p>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <p className="text-center text-gray-500 text-sm mt-8">
+        <p className="text-center text-gray-500 dark:text-gray-400 text-sm mt-8">
           By signing in, you agree to our terms and conditions.
         </p>
       </div>

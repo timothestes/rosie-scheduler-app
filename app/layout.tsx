@@ -7,7 +7,7 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "Rosie Scheduler",
+  title: "Schedule a Lesson with Rosie",
   description: "Book and manage lessons with ease",
 };
 

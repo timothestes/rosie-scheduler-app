@@ -1,4 +1,4 @@
-# Rosie Scheduler
+# Schedule a Lesson with Rosie
 
 A lesson scheduling application built with Next.js and Supabase, featuring role-based access for administrators and students.
 

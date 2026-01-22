@@ -32,7 +32,7 @@ export default function LessonCard({
   };
 
   const googleCalendarUrl = generateGoogleCalendarUrl(
-    `${lessonType?.name || 'Lesson'} - Rosie Scheduler`,
+    `${lessonType?.name || 'Lesson'} - Schedule a Lesson with Rosie`,
     `Lesson Type: ${lessonType?.name}\nLocation: ${lesson.location_type === 'zoom' ? 'Zoom' : 'In-Person'}${lesson.notes ? `\nNotes: ${lesson.notes}` : ''}`,
     startTime,
     endTime,
