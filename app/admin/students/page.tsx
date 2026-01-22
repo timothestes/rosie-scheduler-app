@@ -104,6 +104,22 @@ export default function AdminStudentsPage() {
   };
 
   const handleTogglePaid = async (lessonId: string, isPaid: boolean) => {
+    // Optimistic update - update UI immediately
+    setStudentLessons((prev) =>
+      prev.map((l) => (l.id === lessonId ? { ...l, is_paid: isPaid } : l))
+    );
+    setStudents((prev) =>
+      prev.map((s) => ({
+        ...s,
+        lessons: s.lessons.map((l) =>
+          l.id === lessonId ? { ...l, is_paid: isPaid } : l
+        ),
+        unpaidCount: s.lessons.filter(
+          (l) => l.id === lessonId ? !isPaid : (!l.is_paid && l.status === 'scheduled')
+        ).length,
+      }))
+    );
+
     try {
       const res = await fetch(`/api/lessons/${lessonId}`, {
         method: 'PATCH',
@@ -111,25 +127,40 @@ export default function AdminStudentsPage() {
         body: JSON.stringify({ is_paid: isPaid }),
       });
 
-      if (res.ok) {
+      if (!res.ok) {
+        // Revert on failure
         setStudentLessons((prev) =>
-          prev.map((l) => (l.id === lessonId ? { ...l, is_paid: isPaid } : l))
+          prev.map((l) => (l.id === lessonId ? { ...l, is_paid: !isPaid } : l))
         );
-        // Update the main list too
         setStudents((prev) =>
           prev.map((s) => ({
             ...s,
             lessons: s.lessons.map((l) =>
-              l.id === lessonId ? { ...l, is_paid: isPaid } : l
+              l.id === lessonId ? { ...l, is_paid: !isPaid } : l
             ),
             unpaidCount: s.lessons.filter(
-              (l) => l.id === lessonId ? !isPaid : (!l.is_paid && l.status === 'scheduled')
+              (l) => l.id === lessonId ? isPaid : (!l.is_paid && l.status === 'scheduled')
             ).length,
           }))
         );
       }
     } catch (error) {
       console.error('Error updating payment status:', error);
+      // Revert on error
+      setStudentLessons((prev) =>
+        prev.map((l) => (l.id === lessonId ? { ...l, is_paid: !isPaid } : l))
+      );
+      setStudents((prev) =>
+        prev.map((s) => ({
+          ...s,
+          lessons: s.lessons.map((l) =>
+            l.id === lessonId ? { ...l, is_paid: !isPaid } : l
+          ),
+          unpaidCount: s.lessons.filter(
+            (l) => l.id === lessonId ? isPaid : (!l.is_paid && l.status === 'scheduled')
+          ).length,
+        }))
+      );
     }
   };
 
@@ -141,22 +172,60 @@ export default function AdminStudentsPage() {
     }
   };
 
-  const handleCancelLesson = async () => {
+  const handleCancelLesson = async (cancelSeries?: boolean) => {
     if (!lessonToCancel) return;
 
     const res = await fetch(`/api/lessons/${lessonToCancel.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'cancelled' }),
+      body: JSON.stringify({ status: 'cancelled', cancel_series: cancelSeries }),
     });
 
     if (res.ok) {
-      setStudentLessons((prev) =>
-        prev.map((l) => (l.id === lessonToCancel.id ? { ...l, status: 'cancelled' } : l))
-      );
+      if (cancelSeries && lessonToCancel.recurring_series_id) {
+        // Update all future lessons in the series locally
+        const updateLessons = (lessons: Lesson[]) =>
+          lessons.map((l) => {
+            if (l.id === lessonToCancel.id) {
+              return { ...l, status: 'cancelled' as const };
+            }
+            if (
+              l.recurring_series_id === lessonToCancel.recurring_series_id &&
+              new Date(l.start_time) > new Date(lessonToCancel.start_time) &&
+              l.status === 'scheduled'
+            ) {
+              return { ...l, status: 'cancelled' as const };
+            }
+            return l;
+          });
+
+        setStudentLessons(updateLessons);
+        setStudents((prev) =>
+          prev.map((s) => ({
+            ...s,
+            lessons: updateLessons(s.lessons),
+          }))
+        );
+      } else {
+        setStudentLessons((prev) =>
+          prev.map((l) => (l.id === lessonToCancel.id ? { ...l, status: 'cancelled' } : l))
+        );
+      }
     }
     
     setLessonToCancel(null);
+  };
+
+  // Count future lessons in the same series for the cancel modal
+  const getFutureLessonsCount = () => {
+    if (!lessonToCancel?.recurring_series_id) return 0;
+    return studentLessons.filter(
+      (l) =>
+        l.recurring_series_id === lessonToCancel.recurring_series_id &&
+        l.id !== lessonToCancel.id &&
+        new Date(l.start_time) > new Date(lessonToCancel.start_time) &&
+        l.status === 'scheduled'
+    ).length;
   };
 
   const handleSendReminder = async (student: User) => {
@@ -316,6 +385,8 @@ export default function AdminStudentsPage() {
         onConfirm={handleCancelLesson}
         lessonDate={lessonToCancel ? new Date(lessonToCancel.start_time) : undefined}
         lessonType={lessonToCancel ? getLessonType(lessonToCancel.lesson_type)?.name : undefined}
+        isRecurring={lessonToCancel?.is_recurring || false}
+        futureLessonsCount={getFutureLessonsCount()}
       />
     </div>
   );

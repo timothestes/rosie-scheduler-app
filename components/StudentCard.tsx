@@ -54,7 +54,7 @@ export default function StudentCard({
         
         {unpaidCount > 0 && (
           <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">
-            {unpaidCount} unpaid
+            {unpaidCount} Unpaid
           </span>
         )}
       </div>

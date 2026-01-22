@@ -56,11 +56,16 @@ export interface Lesson {
   end_time: string;
   status: 'scheduled' | 'completed' | 'cancelled';
   is_paid: boolean;
+  paid_at: string | null; // When payment was received
   notes: string | null;
   cancelled_at: string | null;
   cancelled_by: string | null;
   cancellation_reason: string | null;
   google_calendar_event_id: string | null;
+  zoom_meeting_id: string | null;
+  zoom_join_url: string | null;
+  is_recurring: boolean;
+  recurring_series_id: string | null;
   created_at: string;
   updated_at: string;
   // Joined fields
@@ -68,6 +73,16 @@ export interface Lesson {
 }
 
 export interface GoogleToken {
+  id: string;
+  user_id: string;
+  access_token: string;
+  refresh_token: string;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ZoomToken {
   id: string;
   user_id: string;
   access_token: string;

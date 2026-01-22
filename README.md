@@ -121,7 +121,10 @@ npm install
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
-NEXT_PUBLIC_ZOOM_MEETING_URL=your_zoom_meeting_link
+
+# Zoom OAuth (see SETUP.md for detailed instructions)
+ZOOM_CLIENT_ID=your_zoom_client_id
+ZOOM_CLIENT_SECRET=your_zoom_client_secret
 ```
 
 3. Run the development server:

@@ -24,9 +24,23 @@ This document contains all manual setup steps required before running the applic
    - `openid` (already added)
 5. Click **Update** and **Save and Continue**
 
-### 3. Update OAuth Client
+### 3. Update OAuth Client Redirect URIs
 
-Your existing OAuth client should automatically work with the new scopes. No changes needed to the client ID/secret.
+1. Go to **APIs & Services** → **Credentials**
+2. Click on your OAuth 2.0 Client ID
+3. Under **Authorized redirect URIs**, add:
+   - `http://localhost:3000/api/auth/google-calendar/callback` (for development)
+   - `https://your-production-domain.com/api/auth/google-calendar/callback` (for production)
+4. Click **Save**
+
+### 4. Add Google Credentials to Environment
+
+Add your Google OAuth credentials to `.env.local`:
+
+```env
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+```
 
 ---
 
@@ -37,225 +51,7 @@ Your existing OAuth client should automatically work with the new scopes. No cha
 Run the following SQL in your Supabase SQL Editor (or use the `supabase/seed.sql` file):
 
 ```sql
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Admins table (stores admin emails)
-CREATE TABLE IF NOT EXISTS admins (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  email TEXT UNIQUE NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Users table (extended profile info)
-CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email TEXT UNIQUE NOT NULL,
-  full_name TEXT,
-  avatar_url TEXT,
-  phone TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Student notes (private admin notes about students)
-CREATE TABLE IF NOT EXISTS student_notes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  student_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  admin_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  note TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Availability table (admin availability slots)
-CREATE TABLE IF NOT EXISTS availability (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  admin_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  day_of_week INTEGER NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
-  start_time TIME NOT NULL,
-  end_time TIME NOT NULL,
-  is_recurring BOOLEAN DEFAULT true,
-  specific_date DATE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Availability overrides (for editing specific days)
-CREATE TABLE IF NOT EXISTS availability_overrides (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  admin_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  override_date DATE NOT NULL,
-  is_available BOOLEAN DEFAULT false,
-  start_time TIME,
-  end_time TIME,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Lessons table (booked lessons)
-CREATE TABLE IF NOT EXISTS lessons (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  student_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  admin_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  lesson_type TEXT NOT NULL,
-  location_type TEXT NOT NULL CHECK (location_type IN ('in-person', 'zoom')),
-  start_time TIMESTAMPTZ NOT NULL,
-  end_time TIMESTAMPTZ NOT NULL,
-  status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled')),
-  is_paid BOOLEAN DEFAULT false,
-  notes TEXT,
-  cancelled_at TIMESTAMPTZ,
-  cancelled_by UUID REFERENCES users(id),
-  cancellation_reason TEXT,
-  google_calendar_event_id TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Google tokens table (for Google Calendar integration)
-CREATE TABLE IF NOT EXISTS google_tokens (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-  access_token TEXT NOT NULL,
-  refresh_token TEXT NOT NULL,
-  expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create indexes
-CREATE INDEX IF NOT EXISTS idx_lessons_student_id ON lessons(student_id);
-CREATE INDEX IF NOT EXISTS idx_lessons_admin_id ON lessons(admin_id);
-CREATE INDEX IF NOT EXISTS idx_lessons_start_time ON lessons(start_time);
-CREATE INDEX IF NOT EXISTS idx_lessons_status ON lessons(status);
-CREATE INDEX IF NOT EXISTS idx_availability_admin_id ON availability(admin_id);
-CREATE INDEX IF NOT EXISTS idx_availability_day_of_week ON availability(day_of_week);
-CREATE INDEX IF NOT EXISTS idx_availability_overrides_date ON availability_overrides(override_date);
-```
-
-### 2. Create Triggers for Updated At
-
-```sql
--- Function to automatically update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Create triggers
-CREATE TRIGGER update_users_updated_at
-  BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_student_notes_updated_at
-  BEFORE UPDATE ON student_notes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_availability_updated_at
-  BEFORE UPDATE ON availability FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_lessons_updated_at
-  BEFORE UPDATE ON lessons FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_google_tokens_updated_at
-  BEFORE UPDATE ON google_tokens FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-```
-
-### 3. Create User Profile Trigger
-
-```sql
--- Function to create user profile on signup
-CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.users (id, email, full_name, avatar_url)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    NEW.raw_user_meta_data->>'full_name',
-    NEW.raw_user_meta_data->>'avatar_url'
-  );
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Trigger to create user profile on signup
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
-```
-
-### 4. Enable Row Level Security (RLS)
-
-```sql
--- Enable RLS on all tables
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE admins ENABLE ROW LEVEL SECURITY;
-ALTER TABLE student_notes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE availability ENABLE ROW LEVEL SECURITY;
-ALTER TABLE availability_overrides ENABLE ROW LEVEL SECURITY;
-ALTER TABLE lessons ENABLE ROW LEVEL SECURITY;
-ALTER TABLE google_tokens ENABLE ROW LEVEL SECURITY;
-
--- Users policies
-CREATE POLICY "Users can view their own profile"
-  ON users FOR SELECT USING (auth.uid() = id);
-
-CREATE POLICY "Users can update their own profile"
-  ON users FOR UPDATE USING (auth.uid() = id);
-
-CREATE POLICY "Admins can view all users"
-  ON users FOR SELECT
-  USING (EXISTS (SELECT 1 FROM admins WHERE email = (SELECT email FROM auth.users WHERE id = auth.uid())));
-
--- Admins policies
-CREATE POLICY "Anyone can check if they are admin"
-  ON admins FOR SELECT USING (true);
-
--- Student notes policies (admin only)
-CREATE POLICY "Admins can manage student notes"
-  ON student_notes FOR ALL
-  USING (EXISTS (SELECT 1 FROM admins WHERE email = (SELECT email FROM auth.users WHERE id = auth.uid())));
-
--- Availability policies
-CREATE POLICY "Anyone can view availability"
-  ON availability FOR SELECT USING (true);
-
-CREATE POLICY "Admins can manage availability"
-  ON availability FOR ALL
-  USING (EXISTS (SELECT 1 FROM admins WHERE email = (SELECT email FROM auth.users WHERE id = auth.uid())));
-
--- Availability overrides policies
-CREATE POLICY "Anyone can view availability overrides"
-  ON availability_overrides FOR SELECT USING (true);
-
-CREATE POLICY "Admins can manage availability overrides"
-  ON availability_overrides FOR ALL
-  USING (EXISTS (SELECT 1 FROM admins WHERE email = (SELECT email FROM auth.users WHERE id = auth.uid())));
-
--- Lessons policies
-CREATE POLICY "Students can view their own lessons"
-  ON lessons FOR SELECT USING (auth.uid() = student_id);
-
-CREATE POLICY "Students can create lessons"
-  ON lessons FOR INSERT WITH CHECK (auth.uid() = student_id);
-
-CREATE POLICY "Students can update their own lessons"
-  ON lessons FOR UPDATE USING (auth.uid() = student_id);
-
-CREATE POLICY "Admins can manage all lessons"
-  ON lessons FOR ALL
-  USING (EXISTS (SELECT 1 FROM admins WHERE email = (SELECT email FROM auth.users WHERE id = auth.uid())));
-
--- Google tokens policies
-CREATE POLICY "Users can manage their own tokens"
-  ON google_tokens FOR ALL USING (auth.uid() = user_id);
-
-CREATE POLICY "Admins can view all tokens"
-  ON google_tokens FOR SELECT
-  USING (EXISTS (SELECT 1 FROM admins WHERE email = (SELECT email FROM auth.users WHERE id = auth.uid())));
+see supabase/seed.sql
 ```
 
 ### 5. Add Your Admin User
@@ -278,12 +74,109 @@ Create a `.env.local` file in the root directory:
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
-NEXT_PUBLIC_ZOOM_MEETING_URL=your_zoom_meeting_link
 
 # For Google Calendar API (admin calendar overlay)
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+# For Zoom OAuth Integration (see Zoom Setup section below)
+ZOOM_CLIENT_ID=your_zoom_client_id
+ZOOM_CLIENT_SECRET=your_zoom_client_secret
 ```
+
+---
+
+## Zoom OAuth Setup
+
+This app uses Zoom's OAuth API to automatically create unique Zoom meetings for each lesson. Follow these steps to set up Zoom integration.
+
+### 1. Create a Zoom App
+
+1. Go to [Zoom App Marketplace](https://marketplace.zoom.us/)
+2. Sign in with your Zoom account
+3. Click **Develop** → **Build App** (top right)
+4. Choose **General App** as the app type
+5. Click **Create**
+
+### 2. Configure App Settings
+
+#### Basic Information
+- **App Name**: Your app name (e.g., "Rosie Scheduler")
+- **Short Description**: Brief description of your app
+- **Company Name**: Your company or personal name
+
+#### OAuth Settings
+1. Navigate to the **App Credentials** or **OAuth** section
+2. Under **OAuth Redirect URLs**, add:
+   - For development: `http://localhost:3000/api/auth/zoom/callback`
+   - For production: `https://your-domain.com/api/auth/zoom/callback`
+3. Click **Add** for each URL
+
+#### Scopes
+1. Navigate to the **Scopes** section
+2. Click **Add Scopes**
+3. Add the following scopes:
+   - `meeting:write:meeting` - Create and manage meetings
+   - `meeting:delete:meeting` - Delete meetings
+   - `meeting:update:meeting` - Update existing meetings
+   - `user:read:user` - Read user information (for getting Zoom user ID)
+4. Click **Done** to save
+
+### 3. Get Your Credentials
+
+1. Navigate to **App Credentials**
+2. Copy your **Client ID** and **Client Secret**
+3. Add them to your `.env.local`:
+   ```env
+   ZOOM_CLIENT_ID=your_client_id_here
+   ZOOM_CLIENT_SECRET=your_client_secret_here
+   ```
+
+### 4. App Management Type
+
+- When prompted, select **User-managed** (not Admin-managed)
+- This allows individual users to authorize the app with their own Zoom accounts
+
+### 5. Publish or Test Mode
+
+- For development/testing, leave the app in **Development** mode
+- Only you (and users you add to the app) can authorize it
+- For production with multiple users, you'll need to publish the app
+
+### 6. Connect Your Zoom Account
+
+1. Start your development server: `make dev`
+2. Go to `/admin` in your browser
+3. In the **Quick Actions** section, click **Connect Zoom**
+4. You'll be redirected to Zoom to authorize the app
+5. After authorization, you'll be redirected back with a success message
+
+### 7. Database Migration
+
+Run this SQL in your Supabase SQL Editor to add the required tables/columns:
+
+```sql
+-- Zoom tokens table
+CREATE TABLE IF NOT EXISTS zoom_tokens (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) NOT NULL UNIQUE,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Add Zoom columns to lessons table
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS zoom_meeting_id TEXT;
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS zoom_join_url TEXT;
+```
+
+### Troubleshooting Zoom Integration
+
+- **"Zoom not connected" error**: Make sure you've completed the OAuth flow by clicking "Connect Zoom" in the admin dashboard
+- **Token expired**: The app automatically refreshes tokens, but if issues persist, reconnect via the admin dashboard
+- **Scopes error**: Ensure all 4 scopes are added in the Zoom Marketplace app settings
 
 ---
 
@@ -296,3 +189,7 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 - [ ] Triggers set up
 - [ ] Admin email added to admins table
 - [ ] Environment variables configured
+- [ ] Zoom app created in Zoom Marketplace
+- [ ] Zoom OAuth redirect URLs configured
+- [ ] Zoom scopes added (meeting:write, meeting:delete, meeting:update, user:read)
+- [ ] Zoom connected via admin dashboard

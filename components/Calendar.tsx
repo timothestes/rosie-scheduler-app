@@ -19,6 +19,8 @@ interface CalendarProps {
   googleEvents?: GoogleCalendarEvent[];
   availableDates?: string[]; // YYYY-MM-DD format
   view?: 'month' | 'week';
+  blockOutMode?: boolean;
+  selectedBlockOutDates?: Set<string>;
 }
 
 export default function Calendar({
@@ -28,6 +30,8 @@ export default function Calendar({
   googleEvents = [],
   availableDates = [],
   view = 'month',
+  blockOutMode = false,
+  selectedBlockOutDates = new Set(),
 }: CalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date(selectedDate));
 
@@ -120,6 +124,8 @@ export default function Calendar({
           const isSelected = isSameDay(day, selectedDate);
           const isTodayDate = isToday(day);
           const inCurrentMonth = isCurrentMonth(day);
+          const dateStr = formatDate(day, 'iso');
+          const isBlockOutSelected = blockOutMode && selectedBlockOutDates.has(dateStr);
 
           return (
             <button
@@ -129,7 +135,9 @@ export default function Calendar({
                 min-h-[80px] sm:min-h-[100px] p-1 sm:p-2 border-b border-r dark:border-gray-700 text-left
                 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700
                 ${!inCurrentMonth ? 'bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-600' : 'dark:text-gray-200'}
-                ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-500 ring-inset' : ''}
+                ${isSelected && !blockOutMode ? 'bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-500 ring-inset' : ''}
+                ${blockOutMode && inCurrentMonth ? 'cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20' : ''}
+                ${isBlockOutSelected ? 'bg-red-100 dark:bg-red-900/40 ring-2 ring-red-500 ring-inset' : ''}
               `}
             >
               <div className="flex flex-col h-full">

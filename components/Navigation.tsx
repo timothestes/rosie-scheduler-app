@@ -4,13 +4,15 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import type { UserRole } from '@/types';
+import SettingsDropdown from './SettingsDropdown';
 
 interface NavigationProps {
   role: UserRole;
   userEmail?: string;
+  userName?: string | null;
 }
 
-export default function Navigation({ role, userEmail }: NavigationProps) {
+export default function Navigation({ role, userEmail, userName }: NavigationProps) {
   const pathname = usePathname();
   const [darkMode, setDarkMode] = useState(false);
 
@@ -99,10 +101,22 @@ export default function Navigation({ role, userEmail }: NavigationProps) {
               )}
             </button>
 
-            {userEmail && (
-              <span className="text-sm text-gray-500 dark:text-gray-400 mr-1 hidden sm:block">
-                {userEmail}
-              </span>
+            {/* Settings Dropdown (Admin only) */}
+            {role === 'admin' && <SettingsDropdown />}
+
+            {(userName || userEmail) && (
+              <div className="text-right mr-1 hidden sm:block">
+                {userName && (
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {userName}
+                  </p>
+                )}
+                {userEmail && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {userEmail}
+                  </p>
+                )}
+              </div>
             )}
             <form action="/auth/signout" method="post">
               <button

@@ -127,84 +127,114 @@ export default function AvailabilityEditor({
   const timeOptions = generateTimeOptions();
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Weekly Availability</h3>
-      
-      <div className="space-y-4">
-        {[0, 1, 2, 3, 4, 5, 6].map((day) => (
-          <div key={day} className="border dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={schedule[day].enabled}
-                  onChange={() => toggleDay(day)}
-                  className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 mr-3 dark:bg-gray-700"
-                />
-                <span className="font-medium text-gray-900 dark:text-white">{dayNames[day]}</span>
-              </label>
-              
-              {schedule[day].enabled && (
-                <button
-                  type="button"
-                  onClick={() => addSlot(day)}
-                  className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
-                >
-                  + Add time slot
-                </button>
-              )}
+    <div className="space-y-2">
+      {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+        <div 
+          key={day} 
+          className={`rounded-lg transition-all ${
+            schedule[day].enabled 
+              ? 'bg-indigo-50 dark:bg-indigo-900/20 border-2 border-indigo-200 dark:border-indigo-800 p-4' 
+              : 'bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
+        >
+          {/* Day header - always visible, clickable */}
+          <button
+            type="button"
+            onClick={() => toggleDay(day)}
+            className={`w-full flex items-center justify-between ${
+              schedule[day].enabled ? '' : 'py-3 px-4'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                schedule[day].enabled 
+                  ? 'bg-indigo-600 border-indigo-600' 
+                  : 'border-gray-300 dark:border-gray-600'
+              }`}>
+                {schedule[day].enabled && (
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+              <span className={`font-medium ${
+                schedule[day].enabled 
+                  ? 'text-indigo-900 dark:text-indigo-100' 
+                  : 'text-gray-600 dark:text-gray-400'
+              }`}>
+                {dayNames[day]}
+              </span>
             </div>
             
-            {schedule[day].enabled && (
-              <div className="space-y-2 ml-7">
-                {schedule[day].slots.map((slot, slotIndex) => (
-                  <div key={slotIndex} className="flex items-center space-x-2">
-                    <select
-                      value={slot.start}
-                      onChange={(e) => updateSlot(day, slotIndex, 'start', e.target.value)}
-                      className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      {timeOptions.map((time) => (
-                        <option key={time} value={time}>
-                          {formatTime24to12(time)}
-                        </option>
-                      ))}
-                    </select>
-                    
-                    <span className="text-gray-500 dark:text-gray-400">to</span>
-                    
-                    <select
-                      value={slot.end}
-                      onChange={(e) => updateSlot(day, slotIndex, 'end', e.target.value)}
-                      className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      {timeOptions.map((time) => (
-                        <option key={time} value={time}>
-                          {formatTime24to12(time)}
-                        </option>
-                      ))}
-                    </select>
-                    
-                    {schedule[day].slots.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeSlot(day, slotIndex)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
+            {!schedule[day].enabled && (
+              <span className="text-xs text-gray-400 dark:text-gray-500">
+                Click to add availability
+              </span>
             )}
-          </div>
-        ))}
-      </div>
+          </button>
+          
+          {/* Time slots - only when enabled */}
+          {schedule[day].enabled && (
+            <div className="mt-3 ml-8 space-y-2">
+              {schedule[day].slots.map((slot, slotIndex) => (
+                <div key={slotIndex} className="flex items-center gap-2">
+                  <select
+                    value={slot.start}
+                    onChange={(e) => updateSlot(day, slotIndex, 'start', e.target.value)}
+                    className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    {timeOptions.map((time) => (
+                      <option key={time} value={time}>
+                        {formatTime24to12(time)}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  <span className="text-gray-500 dark:text-gray-400 text-sm">to</span>
+                  
+                  <select
+                    value={slot.end}
+                    onChange={(e) => updateSlot(day, slotIndex, 'end', e.target.value)}
+                    className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    {timeOptions.map((time) => (
+                      <option key={time} value={time}>
+                        {formatTime24to12(time)}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {schedule[day].slots.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeSlot(day, slotIndex)}
+                      className="p-1 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors"
+                      title="Remove time slot"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              ))}
+              
+              <button
+                type="button"
+                onClick={() => addSlot(day)}
+                className="flex items-center gap-1 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 mt-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add another time slot
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
       
-      <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex justify-end pt-4">
         <button
           onClick={handleSave}
           disabled={saving || isLoading}

@@ -67,17 +67,33 @@ CREATE TABLE IF NOT EXISTS lessons (
   end_time TIMESTAMPTZ NOT NULL,
   status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled')),
   is_paid BOOLEAN DEFAULT false,
+  paid_at TIMESTAMPTZ,
   notes TEXT,
   cancelled_at TIMESTAMPTZ,
   cancelled_by UUID REFERENCES users(id),
   cancellation_reason TEXT,
   google_calendar_event_id TEXT,
+  zoom_meeting_id TEXT,
+  zoom_join_url TEXT,
+  is_recurring BOOLEAN DEFAULT false,
+  recurring_series_id UUID,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Google tokens table (for Google Calendar integration)
 CREATE TABLE IF NOT EXISTS google_tokens (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Zoom tokens table (for Zoom integration)
+CREATE TABLE IF NOT EXISTS zoom_tokens (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
   access_token TEXT NOT NULL,

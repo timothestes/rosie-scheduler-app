@@ -36,7 +36,7 @@ export default function LessonCard({
     `Lesson Type: ${lessonType?.name}\nLocation: ${lesson.location_type === 'zoom' ? 'Zoom' : 'In-Person'}${lesson.notes ? `\nNotes: ${lesson.notes}` : ''}`,
     startTime,
     endTime,
-    lesson.location_type === 'zoom' ? process.env.NEXT_PUBLIC_ZOOM_MEETING_URL : undefined
+    lesson.zoom_join_url || undefined
   );
 
   return (
@@ -45,6 +45,11 @@ export default function LessonCard({
         <div>
           <h3 className="font-semibold text-gray-900 dark:text-white">
             {lessonType?.name || lesson.lesson_type}
+            {lesson.is_recurring && (
+              <span className="ml-2 text-xs font-normal text-indigo-600 dark:text-indigo-400">
+                🔄 Monthly
+              </span>
+            )}
           </h3>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {formatDate(startTime, 'long')}
@@ -81,13 +86,42 @@ export default function LessonCard({
           </span>
         )}
         
-        {isAdmin && (
+        {isAdmin && onTogglePaid && !isCancelled && (
+          <button
+            onClick={() => onTogglePaid(lesson.id, !lesson.is_paid)}
+            className="flex items-center gap-2 ml-auto"
+            title={`Click to mark as ${lesson.is_paid ? 'not paid' : 'paid'}`}
+          >
+            <span className={`text-xs ${lesson.is_paid ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+              {lesson.is_paid ? 'Paid' : 'Not paid yet'}
+            </span>
+            <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+              lesson.is_paid ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+            }`}>
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm ${
+                lesson.is_paid ? 'translate-x-[18px]' : 'translate-x-1'
+              }`} />
+            </div>
+          </button>
+        )}
+        
+        {isAdmin && !onTogglePaid && (
           <span className={`px-2 py-1 text-xs rounded-full ${
             lesson.is_paid 
               ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' 
-              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
+              : 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300'
           }`}>
-            {lesson.is_paid ? '✓ Paid' : '⏳ Unpaid'}
+            {lesson.is_paid ? '✓ Paid' : '⏳ Not paid yet'}
+          </span>
+        )}
+        
+        {isAdmin && isCancelled && (
+          <span className={`px-2 py-1 text-xs rounded-full ${
+            lesson.is_paid 
+              ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' 
+              : 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300'
+          }`}>
+            {lesson.is_paid ? '✓ Paid' : '⏳ Not paid yet'}
           </span>
         )}
       </div>
@@ -98,40 +132,16 @@ export default function LessonCard({
         </p>
       )}
 
-      {lesson.location_type === 'zoom' && !isCancelled && !isPast && (
-        <a
-          href={process.env.NEXT_PUBLIC_ZOOM_MEETING_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 mb-3"
-        >
-          Join Zoom Meeting →
-        </a>
-      )}
-
       <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-        {!isCancelled && !isPast && (
+        {lesson.location_type === 'zoom' && !isCancelled && !isPast && lesson.zoom_join_url && (
           <a
-            href={googleCalendarUrl}
+            href={lesson.zoom_join_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
+            className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
           >
-            Add to Google Calendar
+            Join Zoom Meeting →
           </a>
-        )}
-
-        {isAdmin && !isCancelled && onTogglePaid && (
-          <button
-            onClick={() => onTogglePaid(lesson.id, !lesson.is_paid)}
-            className={`text-sm ${
-              lesson.is_paid 
-                ? 'text-yellow-600 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300' 
-                : 'text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300'
-            }`}
-          >
-            Mark as {lesson.is_paid ? 'Unpaid' : 'Paid'}
-          </button>
         )}
 
         {!isCancelled && !isPast && onCancel && (

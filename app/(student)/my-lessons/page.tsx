@@ -9,7 +9,7 @@ import type { Lesson } from '@/types';
 export default function MyLessonsPage() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filter, setFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming');
+  const [filter, setFilter] = useState<'upcoming' | 'past' | 'cancelled'>('upcoming');
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [lessonToCancel, setLessonToCancel] = useState<Lesson | null>(null);
 
@@ -39,7 +39,7 @@ export default function MyLessonsPage() {
     }
   };
 
-  const handleCancelLesson = async () => {
+  const handleCancelLesson = async (cancelSeries?: boolean) => {
     if (!lessonToCancel) return;
 
     const res = await fetch(`/api/lessons/${lessonToCancel.id}`, {
@@ -48,18 +48,50 @@ export default function MyLessonsPage() {
       body: JSON.stringify({
         status: 'cancelled',
         cancellation_reason: 'Cancelled by student',
+        cancel_series: cancelSeries,
       }),
     });
 
     if (res.ok) {
-      setLessons((prev) =>
-        prev.map((l) =>
-          l.id === lessonToCancel.id ? { ...l, status: 'cancelled' } : l
-        )
-      );
+      if (cancelSeries && lessonToCancel.recurring_series_id) {
+        // Update all future lessons in the series locally
+        setLessons((prev) =>
+          prev.map((l) => {
+            if (l.id === lessonToCancel.id) {
+              return { ...l, status: 'cancelled' };
+            }
+            if (
+              l.recurring_series_id === lessonToCancel.recurring_series_id &&
+              new Date(l.start_time) > new Date(lessonToCancel.start_time) &&
+              l.status === 'scheduled'
+            ) {
+              return { ...l, status: 'cancelled' };
+            }
+            return l;
+          })
+        );
+      } else {
+        setLessons((prev) =>
+          prev.map((l) =>
+            l.id === lessonToCancel.id ? { ...l, status: 'cancelled' } : l
+          )
+        );
+      }
     }
     
     setLessonToCancel(null);
+  };
+
+  // Count future lessons in the same series for the cancel modal
+  const getFutureLessonsCount = () => {
+    if (!lessonToCancel?.recurring_series_id) return 0;
+    return lessons.filter(
+      (l) =>
+        l.recurring_series_id === lessonToCancel.recurring_series_id &&
+        l.id !== lessonToCancel.id &&
+        new Date(l.start_time) > new Date(lessonToCancel.start_time) &&
+        l.status === 'scheduled'
+    ).length;
   };
 
   const now = new Date();
@@ -69,7 +101,9 @@ export default function MyLessonsPage() {
     if (filter === 'upcoming') {
       return lessonDate >= now && lesson.status !== 'cancelled';
     } else if (filter === 'past') {
-      return lessonDate < now || lesson.status === 'cancelled';
+      return lessonDate < now && lesson.status !== 'cancelled';
+    } else if (filter === 'cancelled') {
+      return lesson.status === 'cancelled';
     }
     return true;
   });
@@ -79,7 +113,11 @@ export default function MyLessonsPage() {
   ).length;
   
   const pastCount = lessons.filter(
-    (l) => new Date(l.start_time) < now || l.status === 'cancelled'
+    (l) => new Date(l.start_time) < now && l.status !== 'cancelled'
+  ).length;
+
+  const cancelledCount = lessons.filter(
+    (l) => l.status === 'cancelled'
   ).length;
 
   if (isLoading) {
@@ -117,14 +155,14 @@ export default function MyLessonsPage() {
           Past ({pastCount})
         </button>
         <button
-          onClick={() => setFilter('all')}
+          onClick={() => setFilter('cancelled')}
           className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-            filter === 'all'
+            filter === 'cancelled'
               ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
               : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
-          All ({lessons.length})
+          Cancelled ({cancelledCount})
         </button>
       </div>
 
@@ -136,7 +174,7 @@ export default function MyLessonsPage() {
               ? "You don't have any upcoming lessons"
               : filter === 'past'
                 ? "You don't have any past lessons"
-                : "You haven't booked any lessons yet"}
+                : "You don't have any cancelled lessons"}
           </p>
           {filter === 'upcoming' && (
             <a
@@ -173,6 +211,8 @@ export default function MyLessonsPage() {
         onConfirm={handleCancelLesson}
         lessonDate={lessonToCancel ? new Date(lessonToCancel.start_time) : undefined}
         lessonType={lessonToCancel ? getLessonType(lessonToCancel.lesson_type)?.name : undefined}
+        isRecurring={lessonToCancel?.is_recurring || false}
+        futureLessonsCount={getFutureLessonsCount()}
       />
     </div>
   );

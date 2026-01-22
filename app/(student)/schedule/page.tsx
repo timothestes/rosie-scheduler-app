@@ -182,6 +182,8 @@ export default function SchedulePage() {
           location_type: data.location_type,
           start_time: startTime.toISOString(),
           notes: data.notes,
+          is_recurring: data.is_recurring,
+          recurring_months: data.recurring_months,
         }),
       });
 
@@ -208,9 +210,13 @@ export default function SchedulePage() {
   const selectedDateStr = formatDate(selectedDate, 'iso');
   const isPastDate = new Date(selectedDateStr) < new Date(formatDate(new Date(), 'iso'));
   const timeSlots = getTimeSlotsForDate(selectedDate);
-  const dayLessons = lessons.filter((l) => {
+  
+  // Filter out cancelled lessons
+  const activeLessons = lessons.filter((l) => l.status !== 'cancelled');
+  
+  const dayLessons = activeLessons.filter((l) => {
     const lessonDate = formatDate(new Date(l.start_time), 'iso');
-    return lessonDate === selectedDateStr && l.status !== 'cancelled';
+    return lessonDate === selectedDateStr;
   });
 
   return (
@@ -230,7 +236,7 @@ export default function SchedulePage() {
           <Calendar
             selectedDate={selectedDate}
             onDateSelect={handleDateSelect}
-            lessons={lessons}
+            lessons={activeLessons}
             availableDates={getAvailableDates()}
           />
           

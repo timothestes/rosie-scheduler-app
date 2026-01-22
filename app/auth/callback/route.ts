@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
+  const next = requestUrl.searchParams.get('next') || '/'
 
   if (code) {
     const supabase = await createClient()
@@ -29,6 +30,6 @@ export async function GET(request: Request) {
     }
   }
 
-  // Redirect to home, which will redirect to admin or schedule based on role
-  return NextResponse.redirect(new URL('/', request.url))
+  // Redirect to the 'next' URL or home
+  return NextResponse.redirect(new URL(next, request.url))
 }

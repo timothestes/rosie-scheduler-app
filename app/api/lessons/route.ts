@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { getLessonDuration } from '@/config/lessonTypes';
+import { getLessonDuration, getLessonType } from '@/config/lessonTypes';
+import { createZoomMeeting } from '@/lib/zoom';
+import { createGoogleCalendarEvent } from '@/lib/google-calendar';
+import { getPrimaryAdminEmail } from '@/lib/utils';
 
 // GET /api/lessons - Get lessons
 export async function GET(request: NextRequest) {
@@ -68,7 +71,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { lesson_type, location_type, start_time, notes } = body;
+  const { lesson_type, location_type, start_time, notes, is_recurring, recurring_months } = body;
 
   // Calculate end time based on lesson type duration
   const duration = getLessonDuration(lesson_type);
@@ -76,55 +79,203 @@ export async function POST(request: NextRequest) {
   const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
 
   // Get an admin to assign the lesson to
-  const { data: admins } = await supabase
-    .from('admins')
-    .select('email')
-    .limit(1);
-
+  // Use PRIMARY_ADMIN_EMAIL env var if set, otherwise fall back to first admin
+  const primaryAdminEmail = getPrimaryAdminEmail();
+  
   let adminId = null;
-  if (admins && admins.length > 0) {
+  if (primaryAdminEmail) {
     const { data: adminUser } = await supabase
       .from('users')
       .select('id')
-      .eq('email', admins[0].email)
+      .eq('email', primaryAdminEmail)
       .single();
     adminId = adminUser?.id;
   }
+  
+  // Fallback to first admin in database if env var not set or user not found
+  if (!adminId) {
+    const { data: admins } = await supabase
+      .from('admins')
+      .select('email')
+      .limit(1);
 
-  // Check for conflicts
-  const { data: conflicts } = await supabase
-    .from('lessons')
-    .select('id')
-    .neq('status', 'cancelled')
-    .lt('start_time', endDate.toISOString())
-    .gt('end_time', startDate.toISOString());
-
-  if (conflicts && conflicts.length > 0) {
-    return NextResponse.json(
-      { error: 'This time slot is already booked' },
-      { status: 409 }
-    );
+    if (admins && admins.length > 0) {
+      const { data: adminUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', admins[0].email)
+        .single();
+      adminId = adminUser?.id;
+    }
   }
 
-  const { data, error } = await supabase
-    .from('lessons')
-    .insert({
-      student_id: user.id,
-      admin_id: adminId,
-      lesson_type,
-      location_type,
-      start_time: startDate.toISOString(),
-      end_time: endDate.toISOString(),
-      notes,
-      status: 'scheduled',
-      is_paid: false,
-    })
-    .select('*, student:users!lessons_student_id_fkey(*)')
+  // Generate all lesson dates (single or recurring)
+  const lessonDates = is_recurring && recurring_months 
+    ? generateRecurringDates(startDate, recurring_months)
+    : [startDate];
+
+  // Check for conflicts on all dates
+  for (const date of lessonDates) {
+    const lessonEnd = new Date(date.getTime() + duration * 60 * 1000);
+    const { data: conflicts } = await supabase
+      .from('lessons')
+      .select('id')
+      .neq('status', 'cancelled')
+      .lt('start_time', lessonEnd.toISOString())
+      .gt('end_time', date.toISOString());
+
+    if (conflicts && conflicts.length > 0) {
+      return NextResponse.json(
+        { error: `Time slot conflict on ${date.toLocaleDateString()}` },
+        { status: 409 }
+      );
+    }
+  }
+
+  // Get student info for calendar events
+  const { data: studentInfo } = await supabase
+    .from('users')
+    .select('full_name, email')
+    .eq('id', user.id)
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const lessonTypeInfo = getLessonType(lesson_type);
+  const studentName = studentInfo?.full_name || studentInfo?.email || 'Student';
+
+  // Generate a recurring series ID if this is a recurring booking
+  const recurringSeriesId = is_recurring ? crypto.randomUUID() : null;
+
+  // Create all lessons
+  const createdLessons = [];
+  
+  for (let i = 0; i < lessonDates.length; i++) {
+    const lessonStart = lessonDates[i];
+    const lessonEnd = new Date(lessonStart.getTime() + duration * 60 * 1000);
+
+    // Create Zoom meeting if lesson is virtual
+    let zoomMeetingId: string | null = null;
+    let zoomJoinUrl: string | null = null;
+
+    if (location_type === 'zoom' && adminId) {
+      const topic = `${lessonTypeInfo?.name || 'Lesson'} - Rosie Scheduler`;
+      
+      const zoomMeeting = await createZoomMeeting(
+        adminId,
+        topic,
+        lessonStart,
+        duration,
+        notes || undefined
+      );
+
+      if (zoomMeeting) {
+        zoomMeetingId = String(zoomMeeting.id);
+        zoomJoinUrl = zoomMeeting.join_url;
+      }
+    }
+
+    // Create Google Calendar event for admin
+    let googleCalendarEventId: string | null = null;
+
+    if (adminId) {
+      const eventTitle = is_recurring
+        ? `Monthly: ${lessonTypeInfo?.name || 'Lesson'} with ${studentName}`
+        : `${lessonTypeInfo?.name || 'Lesson'} with ${studentName}`;
+      
+      const calendarEvent = await createGoogleCalendarEvent(
+        adminId,
+        eventTitle,
+        `Lesson Type: ${lessonTypeInfo?.name}\nStudent: ${studentName}${notes ? `\nNotes: ${notes}` : ''}${zoomJoinUrl ? `\nZoom: ${zoomJoinUrl}` : ''}${is_recurring ? `\nRecurring: ${i + 1} of ${lessonDates.length}` : ''}`,
+        lessonStart,
+        lessonEnd,
+        location_type === 'zoom' ? zoomJoinUrl || 'Zoom' : 'In-Person'
+      );
+
+      if (calendarEvent) {
+        googleCalendarEventId = calendarEvent.id;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('lessons')
+      .insert({
+        student_id: user.id,
+        admin_id: adminId,
+        lesson_type,
+        location_type,
+        start_time: lessonStart.toISOString(),
+        end_time: lessonEnd.toISOString(),
+        notes,
+        status: 'scheduled',
+        is_paid: false,
+        zoom_meeting_id: zoomMeetingId,
+        zoom_join_url: zoomJoinUrl,
+        google_calendar_event_id: googleCalendarEventId,
+        is_recurring: is_recurring || false,
+        recurring_series_id: recurringSeriesId,
+      })
+      .select('*, student:users!lessons_student_id_fkey(*)')
+      .single();
+
+    if (error) {
+      console.error('Error creating lesson:', error);
+      // Continue creating other lessons even if one fails
+      continue;
+    }
+
+    createdLessons.push(data);
   }
 
-  return NextResponse.json(data, { status: 201 });
+  if (createdLessons.length === 0) {
+    return NextResponse.json({ error: 'Failed to create lessons' }, { status: 500 });
+  }
+
+  // Return first lesson for single booking, or all for recurring
+  return NextResponse.json(
+    is_recurring ? { lessons: createdLessons, count: createdLessons.length } : createdLessons[0], 
+    { status: 201 }
+  );
+}
+
+// Helper to get the Nth weekday of a month
+function getNthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): Date | null {
+  const firstDay = new Date(year, month, 1);
+  let count = 0;
+  
+  for (let day = 1; day <= 31; day++) {
+    const date = new Date(year, month, day);
+    if (date.getMonth() !== month) break; // Went to next month
+    
+    if (date.getDay() === weekday) {
+      count++;
+      if (count === n) {
+        return date;
+      }
+    }
+  }
+  
+  return null; // Requested week doesn't exist in this month
+}
+
+// Generate recurring lesson dates (same relative weekday each month)
+function generateRecurringDates(startDate: Date, months: number): Date[] {
+  const dates: Date[] = [];
+  const weekday = startDate.getDay();
+  const weekOfMonth = Math.ceil(startDate.getDate() / 7);
+  const hours = startDate.getHours();
+  const minutes = startDate.getMinutes();
+
+  for (let i = 0; i < months; i++) {
+    const targetMonth = startDate.getMonth() + i;
+    const targetYear = startDate.getFullYear() + Math.floor(targetMonth / 12);
+    const adjustedMonth = targetMonth % 12;
+
+    const date = getNthWeekdayOfMonth(targetYear, adjustedMonth, weekday, weekOfMonth);
+    
+    if (date) {
+      date.setHours(hours, minutes, 0, 0);
+      dates.push(date);
+    }
+  }
+
+  return dates;
 }

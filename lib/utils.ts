@@ -242,3 +242,8 @@ export function generateGoogleCalendarUrl(
   
   return `https://calendar.google.com/calendar/render?${params}`;
 }
+
+// Get the primary admin email from env variable or fallback
+export function getPrimaryAdminEmail(): string | null {
+  return process.env.PRIMARY_ADMIN_EMAIL || null;
+}

@@ -122,4 +122,95 @@ export async function fetchGoogleCalendarEvents(
   }
 }
 
+// Create a Google Calendar event
+export async function createGoogleCalendarEvent(
+  adminUserId: string,
+  summary: string,
+  description: string,
+  startTime: Date,
+  endTime: Date,
+  location?: string
+): Promise<{ id: string; htmlLink: string } | null> {
+  const accessToken = await getValidAccessToken(adminUserId);
+  
+  if (!accessToken) {
+    console.error('No valid Google access token for creating calendar event');
+    return null;
+  }
+
+  try {
+    const event = {
+      summary,
+      description,
+      start: {
+        dateTime: startTime.toISOString(),
+        timeZone: 'America/Los_Angeles', // TODO: Make configurable
+      },
+      end: {
+        dateTime: endTime.toISOString(),
+        timeZone: 'America/Los_Angeles',
+      },
+      ...(location && { location }),
+    };
+
+    const response = await fetch(
+      `${GOOGLE_CALENDAR_API}/calendars/primary/events`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(event),
+      }
+    );
+
+    if (!response.ok) {
+      console.error('Failed to create calendar event:', await response.text());
+      return null;
+    }
+
+    const data = await response.json();
+    return { id: data.id, htmlLink: data.htmlLink };
+  } catch (error) {
+    console.error('Error creating Google Calendar event:', error);
+    return null;
+  }
+}
+
+// Delete a Google Calendar event
+export async function deleteGoogleCalendarEvent(
+  adminUserId: string,
+  eventId: string
+): Promise<boolean> {
+  const accessToken = await getValidAccessToken(adminUserId);
+  
+  if (!accessToken) {
+    console.error('No valid Google access token for deleting calendar event');
+    return false;
+  }
+
+  try {
+    const response = await fetch(
+      `${GOOGLE_CALENDAR_API}/calendars/primary/events/${eventId}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok && response.status !== 404) {
+      console.error('Failed to delete calendar event:', await response.text());
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting Google Calendar event:', error);
+    return false;
+  }
+}
+
 // Note: generateGoogleCalendarUrl moved to lib/utils.ts for client-side usage
