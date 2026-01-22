@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
   const endDate = searchParams.get('endDate');
   const studentId = searchParams.get('studentId');
   const status = searchParams.get('status');
+  const forScheduling = searchParams.get('forScheduling') === 'true';
 
   // Check if user is admin
   const { data: admin } = await supabase
@@ -26,6 +27,21 @@ export async function GET(request: NextRequest) {
     .select('id')
     .eq('email', user.email)
     .single();
+
+  // For scheduling purposes, use the database function to get booked slots (bypasses RLS securely)
+  if (forScheduling && !admin) {
+    const { data, error } = await supabase.rpc('get_booked_slots', {
+      start_date: startDate,
+      end_date: endDate,
+    });
+
+    if (error) {
+      console.error('Lessons GET (scheduling) error:', error);
+      return NextResponse.json({ error: error.message, details: error }, { status: 500 });
+    }
+
+    return NextResponse.json(data);
+  }
 
   let query = supabase
     .from('lessons')

@@ -18,6 +18,7 @@ interface CalendarProps {
   lessons?: Lesson[];
   googleEvents?: GoogleCalendarEvent[];
   availableDates?: string[]; // YYYY-MM-DD format
+  blockedDates?: string[]; // YYYY-MM-DD format - dates with block overrides
   view?: 'month' | 'week';
   blockOutMode?: boolean;
   selectedBlockOutDates?: Set<string>;
@@ -29,6 +30,7 @@ export default function Calendar({
   lessons = [],
   googleEvents = [],
   availableDates = [],
+  blockedDates = [],
   view = 'month',
   blockOutMode = false,
   selectedBlockOutDates = new Set(),
@@ -62,6 +64,11 @@ export default function Calendar({
   const isDateAvailable = (date: Date): boolean => {
     const dateStr = formatDate(date, 'iso');
     return availableDates.includes(dateStr);
+  };
+
+  const isDateBlocked = (date: Date): boolean => {
+    const dateStr = formatDate(date, 'iso');
+    return blockedDates.includes(dateStr);
   };
 
   const isCurrentMonth = (date: Date): boolean => {
@@ -121,6 +128,7 @@ export default function Calendar({
           const dayLessons = getLessonsForDay(day);
           const dayGoogleEvents = getGoogleEventsForDay(day);
           const hasAvailability = isDateAvailable(day);
+          const hasBlockedOverride = isDateBlocked(day);
           const isSelected = isSameDay(day, selectedDate);
           const isTodayDate = isToday(day);
           const inCurrentMonth = isCurrentMonth(day);
@@ -155,6 +163,11 @@ export default function Calendar({
                   {/* Availability indicator */}
                   {hasAvailability && inCurrentMonth && (
                     <div className="h-1.5 w-1.5 rounded-full bg-green-500" title="Available" />
+                  )}
+                  
+                  {/* Blocked out indicator */}
+                  {hasBlockedOverride && inCurrentMonth && (
+                    <div className="h-1.5 w-1.5 rounded-full bg-red-500" title="Blocked Out" />
                   )}
                   
                   {/* Lessons */}

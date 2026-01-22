@@ -20,6 +20,7 @@ export default function SchedulePage() {
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [allLessonsForScheduling, setAllLessonsForScheduling] = useState<Lesson[]>([]);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -29,13 +30,15 @@ export default function SchedulePage() {
     end.setMonth(end.getMonth() + 3);
 
     try {
-      const [lessonsRes, availabilityRes, overridesRes] = await Promise.all([
+      const [lessonsRes, allLessonsRes, availabilityRes, overridesRes] = await Promise.all([
         fetch(`/api/lessons?startDate=${start.toISOString()}&endDate=${end.toISOString()}`),
+        fetch(`/api/lessons?startDate=${start.toISOString()}&endDate=${end.toISOString()}&forScheduling=true`),
         fetch('/api/availability'),
         fetch(`/api/availability/overrides?startDate=${formatDate(start, 'iso')}&endDate=${formatDate(end, 'iso')}`),
       ]);
 
       if (lessonsRes.ok) setLessons(await lessonsRes.json());
+      if (allLessonsRes.ok) setAllLessonsForScheduling(await allLessonsRes.json());
       if (availabilityRes.ok) setAvailability(await availabilityRes.json());
       if (overridesRes.ok) setOverrides(await overridesRes.json());
     } catch (error) {
@@ -48,6 +51,12 @@ export default function SchedulePage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const getBlockedDates = (): string[] => {
+    return overrides
+      .filter((o) => !o.is_available)
+      .map((o) => o.override_date);
+  };
 
   const getAvailableDates = (): string[] => {
     const dates: string[] = [];
@@ -214,7 +223,8 @@ export default function SchedulePage() {
   // Filter out cancelled lessons
   const activeLessons = lessons.filter((l) => l.status !== 'cancelled');
   
-  const dayLessons = activeLessons.filter((l) => {
+  // Use all lessons (including other students') for conflict detection in TimeSlotPicker
+  const allDayLessons = allLessonsForScheduling.filter((l) => {
     const lessonDate = formatDate(new Date(l.start_time), 'iso');
     return lessonDate === selectedDateStr;
   });
@@ -238,12 +248,17 @@ export default function SchedulePage() {
             onDateSelect={handleDateSelect}
             lessons={activeLessons}
             availableDates={getAvailableDates()}
+            blockedDates={getBlockedDates()}
           />
           
           <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
             <div className="flex items-center">
               <div className="w-3 h-3 rounded-full bg-green-500 mr-2" />
               Available
+            </div>
+            <div className="flex items-center">
+              <div className="w-3 h-3 rounded-full bg-red-500 mr-2" />
+              Unavailable
             </div>
             <div className="flex items-center">
               <div className="w-3 h-3 rounded bg-indigo-100 dark:bg-indigo-900 mr-2" />
@@ -276,8 +291,9 @@ export default function SchedulePage() {
                 slots={timeSlots}
                 selectedSlot={selectedTime}
                 onSlotSelect={handleTimeSelect}
-                lessons={dayLessons}
+                lessons={allDayLessons}
                 selectedLessonType={selectedLessonType}
+                selectedDate={selectedDate}
               />
             </>
           )}

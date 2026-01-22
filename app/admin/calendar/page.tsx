@@ -546,6 +546,7 @@ export default function AdminCalendarPage() {
             lessons={showCancelledLessons ? lessons : lessons.filter(l => l.status !== 'cancelled')}
             googleEvents={googleEvents.filter((e) => !lessonGoogleEventIds.has(e.id))}
             availableDates={getAvailableDates()}
+            blockedDates={overrides.filter((o) => !o.is_available).map((o) => o.override_date)}
             blockOutMode={blockOutMode}
             selectedBlockOutDates={selectedBlockOutDates}
           />
@@ -555,6 +556,10 @@ export default function AdminCalendarPage() {
             <div className="flex items-center">
               <div className="w-3 h-3 rounded-full bg-green-500 mr-2" />
               Available
+            </div>
+            <div className="flex items-center">
+              <div className="w-3 h-3 rounded-full bg-red-500 mr-2" />
+              Blocked Out
             </div>
             <div className="flex items-center">
               <div className="w-3 h-3 rounded bg-indigo-100 dark:bg-indigo-900 mr-2" />

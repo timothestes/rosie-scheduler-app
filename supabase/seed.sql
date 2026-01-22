@@ -270,3 +270,27 @@ CREATE POLICY "Admins can view all tokens"
       SELECT 1 FROM admins WHERE email = (SELECT email FROM auth.users WHERE id = auth.uid())
     )
   );
+
+-- Function to get booked time slots for scheduling (no private data exposed)
+-- This bypasses RLS to allow students to see all booked slots for conflict detection
+CREATE OR REPLACE FUNCTION get_booked_slots(start_date TIMESTAMPTZ, end_date TIMESTAMPTZ)
+RETURNS TABLE (
+  id UUID,
+  start_time TIMESTAMPTZ,
+  end_time TIMESTAMPTZ,
+  lesson_type TEXT
+) 
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT l.id, l.start_time, l.end_time, l.lesson_type
+  FROM lessons l
+  WHERE l.status != 'cancelled'
+    AND l.start_time >= start_date
+    AND l.start_time <= end_date;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Grant execute to authenticated users
+GRANT EXECUTE ON FUNCTION get_booked_slots TO authenticated;

@@ -10,6 +10,7 @@ interface TimeSlotPickerProps {
   onSlotSelect: (time: string) => void;
   lessons?: Lesson[];
   selectedLessonType?: string;
+  selectedDate?: Date;
   disabled?: boolean;
 }
 
@@ -19,6 +20,7 @@ export default function TimeSlotPicker({
   onSlotSelect,
   lessons = [],
   selectedLessonType,
+  selectedDate,
   disabled = false,
 }: TimeSlotPickerProps) {
   const lessonDuration = selectedLessonType 
@@ -40,7 +42,9 @@ export default function TimeSlotPicker({
 
   const wouldOverlap = (time: string): boolean => {
     const [hours, minutes] = time.split(':').map(Number);
-    const slotStart = new Date();
+    // Use the selected date, or extract from first lesson, or fallback to today
+    const baseDate = selectedDate || (lessons.length > 0 ? new Date(lessons[0].start_time) : new Date());
+    const slotStart = new Date(baseDate);
     slotStart.setHours(hours, minutes, 0, 0);
     const slotEnd = new Date(slotStart.getTime() + lessonDuration * 60 * 1000);
 
@@ -60,51 +64,60 @@ export default function TimeSlotPicker({
     );
   }
 
-  return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-      {slots.map((slot) => {
-        const bookedLesson = isSlotBooked(slot.start);
-        const hasOverlap = !bookedLesson && wouldOverlap(slot.start);
-        const isSelected = selectedSlot === slot.start;
-        const isDisabled = disabled || !!bookedLesson || hasOverlap || !slot.isAvailable;
+  const hasUnavailableSlots = slots.some((slot) => {
+    const bookedLesson = isSlotBooked(slot.start);
+    const hasOverlap = !bookedLesson && wouldOverlap(slot.start);
+    return bookedLesson || hasOverlap || !slot.isAvailable;
+  });
 
-        return (
-          <button
-            key={slot.start}
-            onClick={() => !isDisabled && onSlotSelect(slot.start)}
-            disabled={isDisabled}
-            className={`
-              px-3 py-2 text-sm rounded-lg border transition-all
-              ${isSelected 
-                ? 'bg-indigo-600 text-white border-indigo-600 dark:bg-indigo-500 dark:border-indigo-500' 
-                : ''}
-              ${bookedLesson 
-                ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 cursor-not-allowed' 
-                : ''}
-              ${hasOverlap && !bookedLesson 
-                ? 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800 cursor-not-allowed' 
-                : ''}
-              ${!slot.isAvailable && !bookedLesson 
-                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700 cursor-not-allowed' 
-                : ''}
-              ${!isSelected && !isDisabled 
-                ? 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30' 
-                : ''}
-            `}
-            title={
-              bookedLesson 
-                ? `Booked: ${bookedLesson.lesson_type}` 
-                : hasOverlap 
-                  ? 'Would overlap with existing lesson'
-                  : !slot.isAvailable 
-                    ? 'Not available'
-                    : ''
-            }
-          >
-            {formatTime24to12(slot.start)}
-          </button>
-        );
-      })}
+  return (
+    <div>
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+        {slots.map((slot) => {
+          const bookedLesson = isSlotBooked(slot.start);
+          const hasOverlap = !bookedLesson && wouldOverlap(slot.start);
+          const isSelected = selectedSlot === slot.start;
+          const isUnavailable = !!bookedLesson || hasOverlap || !slot.isAvailable;
+          const isDisabled = disabled || isUnavailable;
+
+          return (
+            <button
+              key={slot.start}
+              onClick={() => !isDisabled && onSlotSelect(slot.start)}
+              disabled={isDisabled}
+              className={`
+                flex items-center justify-center h-12 text-sm font-medium rounded-lg border transition-all
+                ${isSelected 
+                  ? 'bg-indigo-600 text-white border-indigo-600 dark:bg-indigo-500 dark:border-indigo-500 shadow-md' 
+                  : ''}
+                ${isUnavailable && !isSelected
+                  ? 'bg-gray-100 dark:bg-gray-800/50 text-gray-400 dark:text-gray-600 border-gray-200 dark:border-gray-700/50 cursor-not-allowed line-through decoration-gray-400/50' 
+                  : ''}
+                ${!isSelected && !isDisabled 
+                  ? 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:shadow-sm' 
+                  : ''}
+              `}
+              title={
+                bookedLesson 
+                  ? `Booked: ${bookedLesson.lesson_type}` 
+                  : hasOverlap 
+                    ? 'This time overlaps with an existing lesson'
+                    : !slot.isAvailable 
+                      ? 'Not available'
+                      : 'Click to select this time'
+              }
+            >
+              {formatTime24to12(slot.start)}
+            </button>
+          );
+        })}
+      </div>
+      
+      {hasUnavailableSlots && (
+        <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+          <span className="line-through">Crossed out</span> times are unavailable
+        </p>
+      )}
     </div>
   );
 }
