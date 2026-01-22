@@ -215,12 +215,12 @@ export default function SchedulePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-8">Schedule a Lesson</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-8">Schedule a Lesson</h1>
 
       {bookingSuccess && (
-        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-          <p className="text-green-800 font-medium">✓ Lesson booked successfully!</p>
-          <p className="text-green-600 text-sm">Check your email for confirmation details.</p>
+        <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg">
+          <p className="text-green-800 dark:text-green-300 font-medium">✓ Lesson booked successfully!</p>
+          <p className="text-green-600 dark:text-green-400 text-sm">Check your email for confirmation details.</p>
         </div>
       )}
 
@@ -234,36 +234,36 @@ export default function SchedulePage() {
             availableDates={getAvailableDates()}
           />
           
-          <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600">
+          <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
             <div className="flex items-center">
               <div className="w-3 h-3 rounded-full bg-green-500 mr-2" />
               Available
             </div>
             <div className="flex items-center">
-              <div className="w-3 h-3 rounded bg-indigo-100 mr-2" />
+              <div className="w-3 h-3 rounded bg-indigo-100 dark:bg-indigo-900 mr-2" />
               Your Booking
             </div>
           </div>
         </div>
 
         {/* Time Slot Selection */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             {formatDate(selectedDate, 'long')}
           </h2>
           
           {isPastDate ? (
-            <p className="text-gray-500">Cannot book lessons in the past</p>
+            <p className="text-gray-500 dark:text-gray-400">Cannot book lessons in the past</p>
           ) : timeSlots.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-gray-500">No available times on this day</p>
-              <p className="text-sm text-gray-400 mt-2">
+              <p className="text-gray-500 dark:text-gray-400">No available times on this day</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
                 Please select another date with availability
               </p>
             </div>
           ) : (
             <>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                 Select a time slot to book your lesson
               </p>
               <TimeSlotPicker

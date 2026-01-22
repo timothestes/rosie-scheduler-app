@@ -137,7 +137,7 @@ export default function Calendar({
                   className={`
                     inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 text-sm rounded-full
                     ${isTodayDate ? 'bg-indigo-600 text-white font-semibold' : ''}
-                    ${isSelected && !isTodayDate ? 'bg-indigo-100 text-indigo-700' : ''}
+                    ${isSelected && !isTodayDate ? 'bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-200' : ''}
                   `}
                 >
                   {day.getDate()}

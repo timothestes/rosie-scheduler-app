@@ -5,7 +5,9 @@ import Calendar from '@/components/Calendar';
 import AvailabilityEditor from '@/components/AvailabilityEditor';
 import Modal from '@/components/Modal';
 import LessonCard from '@/components/LessonCard';
+import CancelLessonModal from '@/components/CancelLessonModal';
 import { formatDate, formatTime, dayNames, startOfMonth, endOfMonth, addMonths } from '@/lib/utils';
+import { getLessonType } from '@/config/lessonTypes';
 import type { Lesson, Availability, GoogleCalendarEvent, AvailabilityOverride } from '@/types';
 
 export default function AdminCalendarPage() {
@@ -18,6 +20,8 @@ export default function AdminCalendarPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showAvailabilityEditor, setShowAvailabilityEditor] = useState(false);
   const [showDayDetails, setShowDayDetails] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [lessonToCancel, setLessonToCancel] = useState<Lesson | null>(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -102,24 +106,30 @@ export default function AdminCalendarPage() {
     }
   };
 
-  const handleCancelLesson = async (lessonId: string) => {
-    if (!confirm('Are you sure you want to cancel this lesson?')) return;
-
-    try {
-      const res = await fetch(`/api/lessons/${lessonId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'cancelled' }),
-      });
-
-      if (res.ok) {
-        setLessons((prev) =>
-          prev.map((l) => (l.id === lessonId ? { ...l, status: 'cancelled' } : l))
-        );
-      }
-    } catch (error) {
-      console.error('Error cancelling lesson:', error);
+  const openCancelModal = (lessonId: string) => {
+    const lesson = lessons.find((l) => l.id === lessonId);
+    if (lesson) {
+      setLessonToCancel(lesson);
+      setCancelModalOpen(true);
     }
+  };
+
+  const handleCancelLesson = async () => {
+    if (!lessonToCancel) return;
+
+    const res = await fetch(`/api/lessons/${lessonToCancel.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'cancelled' }),
+    });
+
+    if (res.ok) {
+      setLessons((prev) =>
+        prev.map((l) => (l.id === lessonToCancel.id ? { ...l, status: 'cancelled' } : l))
+      );
+    }
+    
+    setLessonToCancel(null);
   };
 
   const getAvailableDates = (): string[] => {
@@ -288,7 +298,7 @@ export default function AdminCalendarPage() {
                     isAdmin
                     showStudent
                     onTogglePaid={handleTogglePaid}
-                    onCancel={handleCancelLesson}
+                    onCancel={openCancelModal}
                   />
                 ))}
               </div>
@@ -334,6 +344,18 @@ export default function AdminCalendarPage() {
           isLoading={isLoading}
         />
       </Modal>
+
+      {/* Cancel Lesson Modal */}
+      <CancelLessonModal
+        isOpen={cancelModalOpen}
+        onClose={() => {
+          setCancelModalOpen(false);
+          setLessonToCancel(null);
+        }}
+        onConfirm={handleCancelLesson}
+        lessonDate={lessonToCancel ? new Date(lessonToCancel.start_time) : undefined}
+        lessonType={lessonToCancel ? getLessonType(lessonToCancel.lesson_type)?.name : undefined}
+      />
     </div>
   );
 }
