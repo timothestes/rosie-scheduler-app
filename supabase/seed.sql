@@ -278,13 +278,14 @@ RETURNS TABLE (
   id UUID,
   start_time TIMESTAMPTZ,
   end_time TIMESTAMPTZ,
-  lesson_type TEXT
+  lesson_type TEXT,
+  status TEXT
 ) 
 SECURITY DEFINER
 AS $$
 BEGIN
   RETURN QUERY
-  SELECT l.id, l.start_time, l.end_time, l.lesson_type
+  SELECT l.id, l.start_time, l.end_time, l.lesson_type, l.status
   FROM lessons l
   WHERE l.status != 'cancelled'
     AND l.start_time >= start_date

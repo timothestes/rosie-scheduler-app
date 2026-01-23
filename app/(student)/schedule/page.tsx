@@ -4,15 +4,15 @@ import { useState, useEffect, useCallback } from 'react';
 import Calendar from '@/components/Calendar';
 import TimeSlotPicker from '@/components/TimeSlotPicker';
 import BookingForm, { BookingData } from '@/components/BookingForm';
+import LessonCard from '@/components/LessonCard';
+import CancelLessonModal from '@/components/CancelLessonModal';
 import Modal from '@/components/Modal';
-import { formatDate, formatTime24to12, parseTimeToDate, generateTimeSlots } from '@/lib/utils';
-import { getLessonDuration } from '@/config/lessonTypes';
+import { formatDate, formatTime24to12, parseTimeToDate } from '@/lib/utils';
 import type { Lesson, Availability, AvailabilityOverride, TimeSlot } from '@/types';
 
 export default function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [selectedLessonType, setSelectedLessonType] = useState('standard');
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [availability, setAvailability] = useState<Availability[]>([]);
   const [overrides, setOverrides] = useState<AvailabilityOverride[]>([]);
@@ -21,6 +21,7 @@ export default function SchedulePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [allLessonsForScheduling, setAllLessonsForScheduling] = useState<Lesson[]>([]);
+  const [lessonToCancel, setLessonToCancel] = useState<Lesson | null>(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -129,8 +130,9 @@ export default function SchedulePage() {
     }
 
     // Generate time slots for each availability window
+    // Use 30-minute increments - the TimeSlotPicker will handle duration-based filtering
     const slots: TimeSlot[] = [];
-    const lessonDuration = getLessonDuration(selectedLessonType);
+    const slotIncrement = 30; // minutes
 
     for (const window of availabilitySlots) {
       const [startHour, startMin] = window.start.split(':').map(Number);
@@ -138,8 +140,10 @@ export default function SchedulePage() {
       
       const windowStart = startHour * 60 + startMin;
       const windowEnd = endHour * 60 + endMin;
+      const windowEndStr = window.end;
 
-      for (let time = windowStart; time + lessonDuration <= windowEnd; time += 30) {
+      // Generate slots starting every 30 minutes, as long as at least 30 mins fits
+      for (let time = windowStart; time + slotIncrement <= windowEnd; time += 30) {
         const hours = Math.floor(time / 60);
         const minutes = time % 60;
         const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
@@ -152,9 +156,12 @@ export default function SchedulePage() {
           }
         }
 
+        // End time is tentatively 30 minutes after start (minimum slot)
+        const endTime = time + slotIncrement;
         slots.push({
           start: timeStr,
-          end: `${Math.floor((time + lessonDuration) / 60).toString().padStart(2, '0')}:${((time + lessonDuration) % 60).toString().padStart(2, '0')}`,
+          end: `${Math.floor(endTime / 60).toString().padStart(2, '0')}:${(endTime % 60).toString().padStart(2, '0')}`,
+          windowEnd: windowEndStr,
           isAvailable: true,
         });
       }
@@ -192,6 +199,7 @@ export default function SchedulePage() {
           start_time: startTime.toISOString(),
           notes: data.notes,
           is_recurring: data.is_recurring,
+          recurring_frequency: data.recurring_frequency,
           recurring_months: data.recurring_months,
         }),
       });
@@ -222,6 +230,12 @@ export default function SchedulePage() {
   
   // Filter out cancelled lessons
   const activeLessons = lessons.filter((l) => l.status !== 'cancelled');
+  
+  // User's own lessons for the selected day
+  const myDayLessons = activeLessons.filter((l) => {
+    const lessonDate = formatDate(new Date(l.start_time), 'iso');
+    return lessonDate === selectedDateStr;
+  });
   
   // Use all lessons (including other students') for conflict detection in TimeSlotPicker
   const allDayLessons = allLessonsForScheduling.filter((l) => {
@@ -285,17 +299,37 @@ export default function SchedulePage() {
           ) : (
             <>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Select a time slot to book your lesson
+                Select a time slot to book your lesson!
               </p>
               <TimeSlotPicker
                 slots={timeSlots}
                 selectedSlot={selectedTime}
                 onSlotSelect={handleTimeSelect}
                 lessons={allDayLessons}
-                selectedLessonType={selectedLessonType}
                 selectedDate={selectedDate}
               />
             </>
+          )}
+          
+          {/* Show user's booked lessons for this day */}
+          {myDayLessons.length > 0 && (
+            <div className={timeSlots.length > 0 && !isPastDate ? "mt-6 pt-6 border-t border-gray-200 dark:border-gray-700" : ""}>
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Your {myDayLessons.length === 1 ? 'Lesson' : 'Lessons'} on this Day
+              </h3>
+              <div className="space-y-3">
+                {myDayLessons.map((lesson) => (
+                  <LessonCard 
+                    key={lesson.id} 
+                    lesson={lesson} 
+                    onCancel={(lessonId) => {
+                      const lesson = lessons.find(l => l.id === lessonId);
+                      if (lesson) setLessonToCancel(lesson);
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -320,9 +354,55 @@ export default function SchedulePage() {
               setSelectedTime(null);
             }}
             isLoading={isSubmitting}
+            isFirstLesson={lessons.length === 0}
+            maxDuration={(() => {
+              const slot = timeSlots.find(s => s.start === selectedTime);
+              if (!slot?.windowEnd) return undefined;
+              const [startH, startM] = selectedTime.split(':').map(Number);
+              const [endH, endM] = slot.windowEnd.split(':').map(Number);
+              return (endH * 60 + endM) - (startH * 60 + startM);
+            })()}
           />
         )}
       </Modal>
+
+      {/* Cancel Lesson Modal */}
+      <CancelLessonModal
+        isOpen={!!lessonToCancel}
+        onClose={() => setLessonToCancel(null)}
+        onConfirm={async (cancelSeries) => {
+          if (!lessonToCancel) return;
+          
+          const res = await fetch(`/api/lessons/${lessonToCancel.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: 'cancelled',
+              cancel_series: cancelSeries,
+            }),
+          });
+          
+          if (!res.ok) {
+            const error = await res.json();
+            throw new Error(error.error || 'Failed to cancel lesson');
+          }
+          
+          setLessonToCancel(null);
+          await fetchData();
+        }}
+        lessonDate={lessonToCancel ? new Date(lessonToCancel.start_time) : undefined}
+        lessonType={lessonToCancel?.lesson_type}
+        isRecurring={lessonToCancel?.is_recurring}
+        futureLessonsCount={
+          lessonToCancel?.recurring_series_id
+            ? lessons.filter(
+                l => l.recurring_series_id === lessonToCancel.recurring_series_id &&
+                     new Date(l.start_time) > new Date(lessonToCancel.start_time) &&
+                     l.status !== 'cancelled'
+              ).length
+            : 0
+        }
+      />
     </div>
   );
 }

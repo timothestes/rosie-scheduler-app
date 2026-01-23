@@ -1,7 +1,7 @@
 'use client';
 
 import { formatDate, formatTimeRange, generateGoogleCalendarUrl } from '@/lib/utils';
-import { getLessonType, formatRate } from '@/config/lessonTypes';
+import { getLessonType, formatRate, getWeeklyPerLessonRate } from '@/config/lessonTypes';
 import type { Lesson } from '@/types';
 
 interface LessonCardProps {
@@ -80,9 +80,15 @@ export default function LessonCard({
           {lesson.location_type === 'zoom' ? '📹 Zoom' : '📍 In-Person'}
         </span>
         
-        {lessonType && (
+        {lessonType && !lesson.is_recurring && (
           <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
             {formatRate(lessonType.rate)}
+          </span>
+        )}
+        
+        {lessonType && lesson.is_recurring && (
+          <span className="px-2 py-1 text-xs rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+            Billed monthly
           </span>
         )}
         

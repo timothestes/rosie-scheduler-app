@@ -21,7 +21,11 @@ export function formatDate(date: Date | string, format: 'short' | 'long' | 'iso'
         day: 'numeric',
       });
     case 'iso':
-      return d.toISOString().split('T')[0];
+      // Use local timezone for ISO date string (YYYY-MM-DD)
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     case 'short':
     default:
       return d.toLocaleDateString('en-US', {

@@ -1,20 +1,18 @@
 export interface CancellationPolicy {
   noticePeriodHours: number;
-  cancellationFeePercent: number;
+  lateCancellationFee: number; // flat fee in dollars
   terms: string[];
   allowStudentCancellation: boolean;
 }
 
 export const cancellationPolicy: CancellationPolicy = {
   noticePeriodHours: 24,
-  cancellationFeePercent: 50,
+  lateCancellationFee: 10,
   allowStudentCancellation: true,
   terms: [
-    'Lessons cancelled with at least 24 hours notice will receive a full refund or credit.',
-    'Lessons cancelled with less than 24 hours notice may be subject to a 50% cancellation fee.',
-    'No-shows will be charged the full lesson rate.',
-    'In case of emergency, please contact us as soon as possible to discuss options.',
-    'Rescheduling is available up to 2 hours before the lesson time.',
+    'Cancellations or rescheduling require at least 24 hours\' notice.',
+    '1 reschedule per month included.',
+    'Lessons cancelled with less than 24 hours\' notice will incur a $10 fee added to your next lesson.',
   ],
 };
 
@@ -24,11 +22,11 @@ export function canCancelWithoutFee(lessonStartTime: Date): boolean {
   return hoursUntilLesson >= cancellationPolicy.noticePeriodHours;
 }
 
-export function getCancellationFee(lessonRate: number, lessonStartTime: Date): number {
+export function getCancellationFee(lessonStartTime: Date): number {
   if (canCancelWithoutFee(lessonStartTime)) {
     return 0;
   }
-  return Math.round(lessonRate * (cancellationPolicy.cancellationFeePercent / 100));
+  return cancellationPolicy.lateCancellationFee;
 }
 
 export function getTimeUntilLesson(lessonStartTime: Date): string {

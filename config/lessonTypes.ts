@@ -3,47 +3,50 @@ export interface LessonType {
   name: string;
   description: string;
   duration: number; // in minutes
-  rate: number; // in dollars
-  monthlyRate: number; // discounted rate for monthly recurring lessons
+  rate: number; // individual lesson price (billed on day of lesson)
+  weeklyMonthlyRate: number; // total monthly cost for weekly lessons (billed monthly)
   color: string; // for UI display
+  isTrialLesson?: boolean; // trial lessons can't be recurring
 }
 
 export const lessonTypes: LessonType[] = [
   {
-    id: 'standard',
-    name: 'Standard Lesson',
-    description: 'A regular one-on-one lesson',
+    id: 'first_lesson_thirty',
+    name: 'First Lesson (30 min)',
+    description: 'Half price! Focus on setting goals and evaluating points of strength and growth.',
+    duration: 30,
+    rate: 20, // half of $40
+    weeklyMonthlyRate: 20,
+    color: '#10B981', // green
+    isTrialLesson: true,
+  },
+  {
+    id: 'first_lesson_sixty',
+    name: 'First Lesson (1 hour)',
+    description: 'Half price! Focus on setting goals and evaluating points of strength and growth.',
     duration: 60,
-    rate: 75,
-    monthlyRate: 65,
+    rate: 40, // half of $80
+    weeklyMonthlyRate: 40,
+    color: '#10B981', // green
+    isTrialLesson: true,
+  },
+  {
+    id: 'voice_thirty',
+    name: '30 Minute Voice Lesson',
+    description: 'A regular one-on-one voice lesson',
+    duration: 30,
+    rate: 40,
+    weeklyMonthlyRate: 145, // ~$15 savings vs 4x$40=$160
     color: '#3B82F6', // blue
   },
   {
-    id: 'extended',
-    name: 'Extended Lesson',
-    description: 'A longer session for more in-depth learning',
-    duration: 90,
-    rate: 100,
-    monthlyRate: 85,
+    id: 'voice_sixty',
+    name: '1 Hour Voice Lesson',
+    description: 'A full hour one-on-one voice lesson',
+    duration: 60,
+    rate: 80,
+    weeklyMonthlyRate: 305, // ~$15 savings vs 4x$80=$320
     color: '#8B5CF6', // purple
-  },
-  {
-    id: 'trial',
-    name: 'Trial Lesson',
-    description: 'Introductory lesson for new students',
-    duration: 30,
-    rate: 0,
-    monthlyRate: 0,
-    color: '#10B981', // green
-  },
-  {
-    id: 'intensive',
-    name: 'Intensive Session',
-    description: 'Extended practice session',
-    duration: 120,
-    rate: 140,
-    monthlyRate: 120,
-    color: '#F59E0B', // amber
   },
 ];
 
@@ -61,9 +64,23 @@ export function getLessonRate(id: string): number {
   return type?.rate ?? 0;
 }
 
-export function getMonthlyRate(id: string): number {
+export function getWeeklyMonthlyRate(id: string): number {
   const type = getLessonType(id);
-  return type?.monthlyRate ?? type?.rate ?? 0;
+  return type?.weeklyMonthlyRate ?? type?.rate ?? 0;
+}
+
+// Calculate per-lesson price when on weekly plan
+export function getWeeklyPerLessonRate(id: string): number {
+  const type = getLessonType(id);
+  if (!type) return 0;
+  return type.weeklyMonthlyRate / 4;
+}
+
+// Calculate savings per month on weekly plan
+export function getWeeklySavings(id: string): number {
+  const type = getLessonType(id);
+  if (!type || type.isTrialLesson) return 0;
+  return (type.rate * 4) - type.weeklyMonthlyRate;
 }
 
 export function formatDuration(minutes: number): string {

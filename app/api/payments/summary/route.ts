@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import { getLessonType, getMonthlyRate } from '@/config/lessonTypes';
+import { getLessonType, getWeeklyMonthlyRate } from '@/config/lessonTypes';
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -59,9 +59,11 @@ export async function GET(request: Request) {
 
   for (const lesson of lessons || []) {
     const lessonType = getLessonType(lesson.lesson_type);
-    // Use monthly rate for recurring lessons, regular rate otherwise
+    // Use weekly monthly rate for recurring lessons, regular rate otherwise
+    // Note: For weekly plans, weeklyMonthlyRate is the total monthly cost (not per lesson)
+    // We divide by 4 to get the per-lesson cost for tracking purposes
     const rate = lesson.is_recurring 
-      ? (lessonType?.monthlyRate ?? lessonType?.rate ?? 0)
+      ? ((lessonType?.weeklyMonthlyRate ?? lessonType?.rate ?? 0) / 4)
       : (lessonType?.rate ?? 0);
     
     totalAmount += rate;
@@ -100,7 +102,7 @@ export async function GET(request: Request) {
 
   let monthlyRecurringRevenue = 0;
   uniqueRecurringStudents.forEach((lessonType) => {
-    monthlyRecurringRevenue += getMonthlyRate(lessonType);
+    monthlyRecurringRevenue += getWeeklyMonthlyRate(lessonType);
   });
 
   return NextResponse.json({

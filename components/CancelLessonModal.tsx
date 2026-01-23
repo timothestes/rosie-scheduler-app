@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Modal from './Modal';
+import { lessonTypes } from '@/config/lessonTypes';
 
 interface CancelLessonModalProps {
   isOpen: boolean;
@@ -59,13 +60,18 @@ export default function CancelLessonModal({
   // Check if cancellation is within 24 hours
   const isWithin24Hours = lessonDate && (lessonDate.getTime() - Date.now()) < 24 * 60 * 60 * 1000;
 
+  // Get display name for lesson type
+  const lessonTypeName = lessonType 
+    ? lessonTypes.find(lt => lt.id === lessonType)?.name || lessonType
+    : 'Lesson';
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Cancel Lesson" size="md">
       <div className="space-y-4">
         {/* Lesson Info */}
         <div className="text-center py-2">
           <p className="text-lg font-medium text-gray-900 dark:text-white">
-            {lessonType || 'Lesson'}
+            {lessonTypeName}
           </p>
           <p className="text-gray-500 dark:text-gray-400 text-sm">
             {formatLessonDate()}
@@ -76,7 +82,7 @@ export default function CancelLessonModal({
         {isWithin24Hours && (
           <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg px-4 py-3 border border-amber-200 dark:border-amber-700">
             <p className="text-sm text-amber-800 dark:text-amber-200">
-              ⚠️ Less than 24 hours notice — a 50% fee may apply
+              ⚠️ Less than 24 hours notice — a $10 fee will be added to your next lesson
             </p>
           </div>
         )}
@@ -123,13 +129,13 @@ export default function CancelLessonModal({
           </h4>
           <div className="text-center space-y-1.5">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              24+ hours notice → Full refund
+              24+ hours notice → Reschedule or cancel
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Under 24 hours → 50% fee
+              Under 24 hours → $10 fee
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              No-show → Full charge
+              1 reschedule per month included
             </p>
           </div>
         </div>

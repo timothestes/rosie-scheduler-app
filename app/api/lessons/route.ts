@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { getLessonDuration, getLessonType } from '@/config/lessonTypes';
-import { createZoomMeeting } from '@/lib/zoom';
+import { createZoomMeeting, getZoomAccessToken } from '@/lib/zoom';
 import { createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { getPrimaryAdminEmail } from '@/lib/utils';
 
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { lesson_type, location_type, start_time, notes, is_recurring, recurring_months } = body;
+  const { lesson_type, location_type, start_time, notes, is_recurring, recurring_frequency, recurring_months } = body;
 
   // Calculate end time based on lesson type duration
   const duration = getLessonDuration(lesson_type);
@@ -126,9 +126,19 @@ export async function POST(request: NextRequest) {
   }
 
   // Generate all lesson dates (single or recurring)
-  const lessonDates = is_recurring && recurring_months 
-    ? generateRecurringDates(startDate, recurring_months)
-    : [startDate];
+  let lessonDates: Date[];
+  if (is_recurring && recurring_months) {
+    if (recurring_frequency === 'weekly') {
+      // Weekly lessons: 4 lessons per month
+      const totalWeeks = recurring_months * 4;
+      lessonDates = generateWeeklyRecurringDates(startDate, totalWeeks);
+    } else {
+      // Monthly lessons (legacy): 1 lesson per month
+      lessonDates = generateMonthlyRecurringDates(startDate, recurring_months);
+    }
+  } else {
+    lessonDates = [startDate];
+  }
 
   // Check for conflicts on all dates
   for (const date of lessonDates) {
@@ -161,6 +171,12 @@ export async function POST(request: NextRequest) {
   // Generate a recurring series ID if this is a recurring booking
   const recurringSeriesId = is_recurring ? crypto.randomUUID() : null;
 
+  // Pre-fetch Zoom access token once for batch operations (instead of per-lesson)
+  let zoomAccessToken: string | null = null;
+  if (location_type === 'zoom' && adminId) {
+    zoomAccessToken = await getZoomAccessToken(adminId);
+  }
+
   // Create all lessons
   const createdLessons = [];
   
@@ -172,7 +188,7 @@ export async function POST(request: NextRequest) {
     let zoomMeetingId: string | null = null;
     let zoomJoinUrl: string | null = null;
 
-    if (location_type === 'zoom' && adminId) {
+    if (location_type === 'zoom' && adminId && zoomAccessToken) {
       const topic = `${lessonTypeInfo?.name || 'Lesson'} - Rosie Scheduler`;
       
       const zoomMeeting = await createZoomMeeting(
@@ -180,7 +196,8 @@ export async function POST(request: NextRequest) {
         topic,
         lessonStart,
         duration,
-        notes || undefined
+        notes || undefined,
+        zoomAccessToken // Pass pre-fetched token
       );
 
       if (zoomMeeting) {
@@ -193,8 +210,9 @@ export async function POST(request: NextRequest) {
     let googleCalendarEventId: string | null = null;
 
     if (adminId) {
+      const recurringLabel = recurring_frequency === 'weekly' ? 'Weekly' : 'Monthly';
       const eventTitle = is_recurring
-        ? `Monthly: ${lessonTypeInfo?.name || 'Lesson'} with ${studentName}`
+        ? `${recurringLabel}: ${lessonTypeInfo?.name || 'Lesson'} with ${studentName}`
         : `${lessonTypeInfo?.name || 'Lesson'} with ${studentName}`;
       
       const calendarEvent = await createGoogleCalendarEvent(
@@ -272,8 +290,24 @@ function getNthWeekdayOfMonth(year: number, month: number, weekday: number, n: n
   return null; // Requested week doesn't exist in this month
 }
 
-// Generate recurring lesson dates (same relative weekday each month)
-function generateRecurringDates(startDate: Date, months: number): Date[] {
+// Generate weekly recurring lesson dates (same day each week)
+function generateWeeklyRecurringDates(startDate: Date, weeks: number): Date[] {
+  const dates: Date[] = [];
+  const hours = startDate.getHours();
+  const minutes = startDate.getMinutes();
+
+  for (let i = 0; i < weeks; i++) {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + (i * 7));
+    date.setHours(hours, minutes, 0, 0);
+    dates.push(date);
+  }
+
+  return dates;
+}
+
+// Generate monthly recurring lesson dates (same relative weekday each month)
+function generateMonthlyRecurringDates(startDate: Date, months: number): Date[] {
   const dates: Date[] = [];
   const weekday = startDate.getDay();
   const weekOfMonth = Math.ceil(startDate.getDate() / 7);

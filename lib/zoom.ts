@@ -157,16 +157,22 @@ async function getValidAccessToken(adminId: string): Promise<string | null> {
   return tokenData.access_token;
 }
 
+// Export the token getter for batch operations
+export async function getZoomAccessToken(adminId: string): Promise<string | null> {
+  return getValidAccessToken(adminId);
+}
+
 export async function createZoomMeeting(
   adminId: string,
   topic: string,
   startTime: Date,
   durationMinutes: number,
-  agenda?: string
+  agenda?: string,
+  accessToken?: string // Optional pre-fetched token for batch operations
 ): Promise<ZoomMeeting | null> {
-  const accessToken = await getValidAccessToken(adminId);
+  const token = accessToken || await getValidAccessToken(adminId);
   
-  if (!accessToken) {
+  if (!token) {
     console.log('No valid Zoom access token available');
     return null;
   }
@@ -174,7 +180,7 @@ export async function createZoomMeeting(
   const response = await fetch(`${ZOOM_API_URL}/users/me/meetings`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({

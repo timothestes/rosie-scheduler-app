@@ -114,6 +114,7 @@ export interface GoogleCalendarEvent {
 export interface TimeSlot {
   start: string; // HH:mm
   end: string;
+  windowEnd?: string; // HH:mm - the end of the availability window this slot belongs to
   isAvailable: boolean;
   isBooked?: boolean;
   lesson?: Lesson;
