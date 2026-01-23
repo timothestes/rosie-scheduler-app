@@ -120,7 +120,7 @@ This app uses Zoom's OAuth API to automatically create unique Zoom meetings for 
    - `meeting:delete:meeting` - Delete meetings
    - `meeting:update:meeting` - Update existing meetings
    - `user:read:user` - Read user information (for getting Zoom user ID)
-4. Click **Done** to save
+4. Click **Done** to save.
 
 ### 3. Get Your Credentials
 
