@@ -47,7 +47,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
 
         {/* Footer */}
         <p className="text-center text-gray-500 dark:text-gray-400 text-sm mt-8">
-          By signing in, you agree to our terms and conditions.
+          {/* By signing in, you agree to our terms and conditions. */}
         </p>
       </div>
     </div>

@@ -63,8 +63,14 @@ export default async function AdminDashboard() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
         <div className="flex flex-wrap gap-3 items-center">
           <Link
-            href="/admin/calendar"
+            href="/lessons"
             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 transition-colors"
+          >
+            View All Lessons
+          </Link>
+          <Link
+            href="/admin/calendar"
+            className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
           >
             Manage Availability
           </Link>
@@ -99,8 +105,8 @@ export default async function AdminDashboard() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
           <div className="px-6 py-4 border-b dark:border-gray-700 flex justify-between items-center">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Upcoming Lessons</h2>
-            <Link href="/admin/calendar" className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300">
-              View Calendar →
+            <Link href="/lessons" className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300">
+              View All Lessons →
             </Link>
           </div>
           <div className="divide-y dark:divide-gray-700">

@@ -14,7 +14,7 @@ interface NavigationProps {
 
 export default function Navigation({ role, userEmail, userName }: NavigationProps) {
   const pathname = usePathname();
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState<boolean | null>(null);
 
   useEffect(() => {
     // Check localStorage and system preference on mount
@@ -27,7 +27,9 @@ export default function Navigation({ role, userEmail, userName }: NavigationProp
   }, []);
 
   useEffect(() => {
-    // Apply dark mode class to document
+    // Only apply dark mode class after we've read the stored value
+    if (darkMode === null) return;
+    
     if (darkMode) {
       document.documentElement.classList.add('dark');
     } else {
@@ -41,12 +43,13 @@ export default function Navigation({ role, userEmail, userName }: NavigationProp
   const adminLinks = [
     { href: '/admin', label: 'Dashboard' },
     { href: '/admin/calendar', label: 'Calendar' },
+    { href: '/lessons', label: 'Lessons' },
     { href: '/admin/students', label: 'Students' },
   ];
 
   const studentLinks = [
     { href: '/schedule', label: 'Schedule Lessons' },
-    { href: '/my-lessons', label: 'My Lessons' },
+    { href: '/lessons', label: 'My Lessons' },
   ];
 
   const links = role === 'admin' ? adminLinks : studentLinks;
@@ -55,13 +58,14 @@ export default function Navigation({ role, userEmail, userName }: NavigationProp
     <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
-          <div className="flex">
+          <div className="flex items-center">
             <div className="flex-shrink-0 flex items-center">
-              <Link href={role === 'admin' ? '/admin' : '/schedule'} className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
-                Schedule a Lesson with Rosie
+              <Link href={role === 'admin' ? '/admin' : '/schedule'} className="text-lg sm:text-xl font-bold text-indigo-600 dark:text-indigo-400">
+                <span className="hidden sm:inline">Schedule a Lesson with Rosie</span>
+                <span className="sm:hidden">Rosie</span>
               </Link>
             </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+            <div className="hidden md:ml-6 md:flex md:space-x-8">
               {links.map((link) => {
                 const isActive = pathname === link.href || 
                   (link.href !== '/admin' && link.href !== '/schedule' && pathname.startsWith(link.href));
@@ -83,7 +87,7 @@ export default function Navigation({ role, userEmail, userName }: NavigationProp
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* Dark Mode Toggle */}
             <button
               onClick={toggleDarkMode}
@@ -105,7 +109,7 @@ export default function Navigation({ role, userEmail, userName }: NavigationProp
             {role === 'admin' && <SettingsDropdown />}
 
             {(userName || userEmail) && (
-              <div className="text-right mr-1 hidden sm:block">
+              <div className="text-right mr-1 hidden md:block">
                 {userName && (
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     {userName}
@@ -121,17 +125,20 @@ export default function Navigation({ role, userEmail, userName }: NavigationProp
             <form action="/auth/signout" method="post">
               <button
                 type="submit"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-3 sm:px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                Sign Out
+                <span className="hidden sm:inline">Sign Out</span>
+                <svg className="sm:hidden w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
               </button>
             </form>
           </div>
         </div>
         
-        {/* Mobile navigation */}
-        <div className="sm:hidden pb-3">
-          <div className="flex space-x-4">
+        {/* Mobile/Tablet navigation */}
+        <div className="md:hidden pb-3">
+          <div className="flex space-x-1 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {links.map((link) => {
               const isActive = pathname === link.href || 
                 (link.href !== '/admin' && link.href !== '/schedule' && pathname.startsWith(link.href));
@@ -140,7 +147,7 @@ export default function Navigation({ role, userEmail, userName }: NavigationProp
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`px-3 py-2 rounded-md text-sm font-medium ${
+                  className={`px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap flex-shrink-0 ${
                     isActive
                       ? 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300'
                       : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200'

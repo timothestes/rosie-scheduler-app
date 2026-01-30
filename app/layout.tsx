@@ -23,10 +23,16 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
-                const darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                if (darkMode) {
-                  document.documentElement.classList.add('dark');
-                }
+                try {
+                  const stored = localStorage.getItem('darkMode');
+                  if (stored === 'true') {
+                    document.documentElement.classList.add('dark');
+                  } else if (stored === 'false') {
+                    document.documentElement.classList.remove('dark');
+                  } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.documentElement.classList.add('dark');
+                  }
+                } catch (e) {}
               })();
             `,
           }}

@@ -178,3 +178,10 @@ make build
 - Visual indicators for available/booked/blocked slots
 - Configurable lesson types
 - Configurable cancellation policy
+
+
+## Outstanding Questions
+- Do we want to support non-gmail sign ins?
+- How would you like to onboard current students?
+- How important are reminders to you?
+- Would you prefer text or email reminders?

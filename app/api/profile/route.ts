@@ -10,6 +10,15 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Check if user is admin
+  const { data: admin } = await supabase
+    .from('admins')
+    .select('id')
+    .eq('email', user.email)
+    .single();
+
+  const isAdmin = !!admin;
+
   const { data: profile, error } = await supabase
     .from('users')
     .select('id, email, full_name, phone, avatar_url, created_at')
@@ -23,10 +32,11 @@ export async function GET() {
       email: user.email,
       full_name: null,
       phone: null,
+      isAdmin,
     });
   }
 
-  return NextResponse.json(profile);
+  return NextResponse.json({ ...profile, isAdmin });
 }
 
 // Validation helpers

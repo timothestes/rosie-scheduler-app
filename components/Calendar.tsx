@@ -161,20 +161,20 @@ export default function Calendar({
                 
                 <div className="mt-1 space-y-1 overflow-hidden">
                   {/* Availability indicator */}
-                  {hasAvailability && inCurrentMonth && (
-                    <div className="h-1.5 w-1.5 rounded-full bg-green-500" title="Available" />
+                  {hasAvailability && (
+                    <div className={`h-1.5 w-1.5 rounded-full bg-green-500 ${!inCurrentMonth ? 'opacity-50' : ''}`} title="Available" />
                   )}
                   
                   {/* Blocked out indicator */}
-                  {hasBlockedOverride && inCurrentMonth && (
-                    <div className="h-1.5 w-1.5 rounded-full bg-red-500" title="Blocked Out" />
+                  {hasBlockedOverride && (
+                    <div className={`h-1.5 w-1.5 rounded-full bg-red-500 ${!inCurrentMonth ? 'opacity-50' : ''}`} title="Blocked Out" />
                   )}
                   
                   {/* Lessons */}
                   {dayLessons.slice(0, 2).map((lesson) => (
                     <div
                       key={lesson.id}
-                      className="text-xs truncate px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300"
+                      className={`text-xs truncate px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 ${!inCurrentMonth ? 'opacity-50' : ''}`}
                       title={`${lesson.lesson_type} - ${lesson.student?.full_name || 'Student'}`}
                     >
                       <span className="hidden sm:inline">
@@ -191,7 +191,7 @@ export default function Calendar({
                   {dayGoogleEvents.slice(0, 1).map((event) => (
                     <div
                       key={event.id}
-                      className="text-xs truncate px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                      className={`text-xs truncate px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 ${!inCurrentMonth ? 'opacity-50' : ''}`}
                       title={event.summary}
                     >
                       <span className="hidden sm:inline">{event.summary}</span>
