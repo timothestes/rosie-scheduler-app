@@ -14,6 +14,7 @@ export default function LessonsPage() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [discountPercent, setDiscountPercent] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('timeline');
   const [filter, setFilter] = useState<FilterType>('upcoming');
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -32,6 +33,7 @@ export default function LessonsPage() {
       if (res.ok) {
         const data = await res.json();
         setIsAdmin(data.isAdmin || false);
+        setDiscountPercent(data.discount_percent || 0);
       }
     } catch (error) {
       console.error('Error checking admin status:', error);
@@ -111,9 +113,8 @@ export default function LessonsPage() {
     });
 
     if (res.ok) {
-      setLessons((prev) =>
-        prev.map((l) => (l.id === lessonId ? { ...l, is_paid: isPaid } : l))
-      );
+      // Refetch all lessons to get updated paid status for recurring series
+      await fetchLessons();
     }
   };
 
@@ -496,6 +497,7 @@ export default function LessonsPage() {
                               : undefined
                           }
                           onTogglePaid={isAdmin ? handleTogglePaid : undefined}
+                          discountPercent={isAdmin ? (lesson.student?.discount_percent || 0) : discountPercent}
                         />
                       ))}
                     </div>
@@ -520,6 +522,7 @@ export default function LessonsPage() {
                   : undefined
               }
               onTogglePaid={isAdmin ? handleTogglePaid : undefined}
+              discountPercent={isAdmin ? (lesson.student?.discount_percent || 0) : discountPercent}
             />
           ))}
         </div>

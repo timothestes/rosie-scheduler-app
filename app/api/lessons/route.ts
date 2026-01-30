@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
   const studentId = searchParams.get('studentId');
   const status = searchParams.get('status');
   const forScheduling = searchParams.get('forScheduling') === 'true';
+  const paidStartDate = searchParams.get('paidStartDate');
+  const paidEndDate = searchParams.get('paidEndDate');
 
   // Check if user is admin
   const { data: admin } = await supabase
@@ -61,6 +63,17 @@ export async function GET(request: NextRequest) {
 
   if (endDate) {
     query = query.lte('start_time', endDate);
+  }
+
+  // Filter by paid_at date range (for payment reports)
+  if (paidStartDate) {
+    query = query.gte('paid_at', paidStartDate);
+  }
+
+  if (paidEndDate) {
+    const endDateTime = new Date(paidEndDate);
+    endDateTime.setHours(23, 59, 59, 999);
+    query = query.lte('paid_at', endDateTime.toISOString());
   }
 
   if (status) {

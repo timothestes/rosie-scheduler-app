@@ -99,8 +99,50 @@ export async function PATCH(
   // Set paid_at timestamp when marking as paid
   if (body.is_paid === true && !lesson.is_paid) {
     updates.paid_at = new Date().toISOString();
+    
+    // For recurring lessons, mark ALL lessons in the same month as paid (monthly billing)
+    if (lesson.is_recurring && lesson.recurring_series_id) {
+      // Get the month of the current lesson
+      const lessonDate = new Date(lesson.start_time);
+      const year = lessonDate.getFullYear();
+      const month = lessonDate.getMonth();
+      const monthStart = new Date(year, month, 1).toISOString();
+      const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999).toISOString();
+      
+      // Update all lessons in the same recurring series for this month
+      await supabase
+        .from('lessons')
+        .update({
+          is_paid: true,
+          paid_at: new Date().toISOString()
+        })
+        .eq('recurring_series_id', lesson.recurring_series_id)
+        .gte('start_time', monthStart)
+        .lte('start_time', monthEnd)
+        .eq('is_paid', false);
+    }
   } else if (body.is_paid === false) {
     updates.paid_at = null;
+    
+    // For recurring lessons, unmark ALL lessons in the same month as unpaid (monthly billing)
+    if (lesson.is_recurring && lesson.recurring_series_id) {
+      const lessonDate = new Date(lesson.start_time);
+      const year = lessonDate.getFullYear();
+      const month = lessonDate.getMonth();
+      const monthStart = new Date(year, month, 1).toISOString();
+      const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999).toISOString();
+      
+      await supabase
+        .from('lessons')
+        .update({
+          is_paid: false,
+          paid_at: null
+        })
+        .eq('recurring_series_id', lesson.recurring_series_id)
+        .gte('start_time', monthStart)
+        .lte('start_time', monthEnd)
+        .eq('is_paid', true);
+    }
   }
 
   // Handle cancellation

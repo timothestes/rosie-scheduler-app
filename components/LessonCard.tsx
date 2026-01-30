@@ -10,6 +10,7 @@ interface LessonCardProps {
   onCancel?: (lessonId: string) => void;
   onTogglePaid?: (lessonId: string, isPaid: boolean) => void;
   showStudent?: boolean;
+  discountPercent?: number; // Student's discount percentage (0-100)
 }
 
 export default function LessonCard({
@@ -18,12 +19,24 @@ export default function LessonCard({
   onCancel,
   onTogglePaid,
   showStudent = false,
+  discountPercent = 0,
 }: LessonCardProps) {
   const lessonType = getLessonType(lesson.lesson_type);
   const startTime = new Date(lesson.start_time);
   const endTime = new Date(lesson.end_time);
   const isPast = startTime < new Date();
   const isCancelled = lesson.status === 'cancelled';
+  
+  // Calculate discounted rate (rounds up to nearest dollar)
+  const originalRate = lessonType?.rate ?? 0;
+  const originalMonthlyRate = lessonType?.weeklyMonthlyRate ?? 0;
+  const discountedRate = discountPercent > 0 
+    ? Math.ceil(originalRate * (1 - discountPercent / 100))
+    : originalRate;
+  const discountedMonthlyRate = discountPercent > 0
+    ? Math.ceil(originalMonthlyRate * (1 - discountPercent / 100))
+    : originalMonthlyRate;
+  const hasDiscount = discountPercent > 0 && !isPast;
 
   const statusColors = {
     scheduled: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
@@ -82,26 +95,44 @@ export default function LessonCard({
         
         {lessonType && !lesson.is_recurring && (
           <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-            {formatRate(lessonType.rate)}
+            {hasDiscount ? (
+              <>
+                <span className="line-through text-gray-400 dark:text-gray-500 mr-1">{formatRate(originalRate)}</span>
+                <span className="text-green-600 dark:text-green-400">{formatRate(discountedRate)}</span>
+                <span className="ml-1 text-green-600 dark:text-green-400">({discountPercent}% off)</span>
+              </>
+            ) : (
+              formatRate(lessonType.rate)
+            )}
           </span>
         )}
         
         {lessonType && lesson.is_recurring && (
           <span className="px-2 py-1 text-xs rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
-            Billed monthly
+            {hasDiscount ? (
+              <>
+                <span className="line-through text-indigo-400 dark:text-indigo-500 mr-1">{formatRate(originalMonthlyRate)}</span>
+                <span className="text-green-600 dark:text-green-400">{formatRate(discountedMonthlyRate)}/mo</span>
+              </>
+            ) : (
+              <>{formatRate(originalMonthlyRate)}/mo</>
+            )}
           </span>
         )}
-        
-        {isAdmin && onTogglePaid && !isCancelled && (
+      </div>
+      
+      {/* Payment toggle - separate row for consistent layout */}
+      {isAdmin && onTogglePaid && !isCancelled && (
+        <div className="flex items-center justify-end mb-3">
           <button
             onClick={() => onTogglePaid(lesson.id, !lesson.is_paid)}
-            className="flex items-center gap-2 ml-auto"
+            className="flex items-center gap-2"
             title={`Click to mark as ${lesson.is_paid ? 'not paid' : 'paid'}`}
           >
-            <span className={`text-xs ${lesson.is_paid ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
-              {lesson.is_paid ? 'Paid' : 'Not paid yet'}
+            <span className={`text-xs min-w-[52px] text-right ${lesson.is_paid ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+              {lesson.is_paid ? 'Paid' : 'Unpaid'}
             </span>
-            <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+            <div className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${
               lesson.is_paid ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
             }`}>
               <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm ${
@@ -109,28 +140,33 @@ export default function LessonCard({
               }`} />
             </div>
           </button>
-        )}
-        
-        {isAdmin && !onTogglePaid && (
+        </div>
+      )}
+      
+      {/* Payment status badge (when toggle not available) */}
+      {isAdmin && !onTogglePaid && (
+        <div className="flex items-center justify-end mb-3">
           <span className={`px-2 py-1 text-xs rounded-full ${
             lesson.is_paid 
               ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' 
               : 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300'
           }`}>
-            {lesson.is_paid ? '✓ Paid' : '⏳ Not paid yet'}
+            {lesson.is_paid ? '✓ Paid' : '⏳ Unpaid'}
           </span>
-        )}
-        
-        {isAdmin && isCancelled && (
+        </div>
+      )}
+      
+      {isAdmin && isCancelled && (
+        <div className="flex items-center justify-end mb-3">
           <span className={`px-2 py-1 text-xs rounded-full ${
             lesson.is_paid 
               ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' 
               : 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300'
           }`}>
-            {lesson.is_paid ? '✓ Paid' : '⏳ Not paid yet'}
+            {lesson.is_paid ? '✓ Paid' : '⏳ Unpaid'}
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {lesson.notes && (
         <p className="text-sm text-gray-600 dark:text-gray-300 mb-3 italic">

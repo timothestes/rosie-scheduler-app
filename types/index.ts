@@ -5,6 +5,7 @@ export interface User {
   full_name: string | null;
   avatar_url: string | null;
   phone: string | null;
+  discount_percent: number; // 0-100 percentage discount on lesson fees
   created_at: string;
   updated_at: string;
 }

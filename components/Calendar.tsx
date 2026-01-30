@@ -78,8 +78,8 @@ export default function Calendar({
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b dark:border-gray-700">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+      <div className="flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4 border-b dark:border-gray-700">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
           {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
         </h2>
         <div className="flex space-x-2">
@@ -140,7 +140,7 @@ export default function Calendar({
               key={index}
               onClick={() => onDateSelect(day)}
               className={`
-                min-h-[80px] sm:min-h-[100px] p-1 sm:p-2 border-b border-r dark:border-gray-700 text-left
+                min-h-[70px] sm:min-h-[100px] p-0.5 sm:p-2 border-b border-r dark:border-gray-700 text-left
                 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700
                 ${!inCurrentMonth ? 'bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-600' : 'dark:text-gray-200'}
                 ${isSelected && !blockOutMode ? 'bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-500 ring-inset' : ''}
@@ -148,10 +148,10 @@ export default function Calendar({
                 ${isBlockOutSelected ? 'bg-red-100 dark:bg-red-900/40 ring-2 ring-red-500 ring-inset' : ''}
               `}
             >
-              <div className="flex flex-col h-full">
+              <div className="flex flex-col h-full items-center sm:items-start">
                 <span
                   className={`
-                    inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 text-sm rounded-full
+                    inline-flex items-center justify-center w-5 h-5 sm:w-7 sm:h-7 text-xs sm:text-sm rounded-full
                     ${isTodayDate ? 'bg-indigo-600 text-white font-semibold' : ''}
                     ${isSelected && !isTodayDate ? 'bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-200' : ''}
                   `}

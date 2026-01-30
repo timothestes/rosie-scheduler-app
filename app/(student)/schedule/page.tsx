@@ -22,6 +22,7 @@ export default function SchedulePage() {
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [allLessonsForScheduling, setAllLessonsForScheduling] = useState<Lesson[]>([]);
   const [lessonToCancel, setLessonToCancel] = useState<Lesson | null>(null);
+  const [discountPercent, setDiscountPercent] = useState(0);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -31,17 +32,22 @@ export default function SchedulePage() {
     end.setMonth(end.getMonth() + 3);
 
     try {
-      const [lessonsRes, allLessonsRes, availabilityRes, overridesRes] = await Promise.all([
+      const [lessonsRes, allLessonsRes, availabilityRes, overridesRes, profileRes] = await Promise.all([
         fetch(`/api/lessons?startDate=${start.toISOString()}&endDate=${end.toISOString()}`),
         fetch(`/api/lessons?startDate=${start.toISOString()}&endDate=${end.toISOString()}&forScheduling=true`),
         fetch('/api/availability'),
         fetch(`/api/availability/overrides?startDate=${formatDate(start, 'iso')}&endDate=${formatDate(end, 'iso')}`),
+        fetch('/api/profile'),
       ]);
 
       if (lessonsRes.ok) setLessons(await lessonsRes.json());
       if (allLessonsRes.ok) setAllLessonsForScheduling(await allLessonsRes.json());
       if (availabilityRes.ok) setAvailability(await availabilityRes.json());
       if (overridesRes.ok) setOverrides(await overridesRes.json());
+      if (profileRes.ok) {
+        const profile = await profileRes.json();
+        setDiscountPercent(profile.discount_percent || 0);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -326,6 +332,7 @@ export default function SchedulePage() {
                       const lesson = lessons.find(l => l.id === lessonId);
                       if (lesson) setLessonToCancel(lesson);
                     }}
+                    discountPercent={discountPercent}
                   />
                 ))}
               </div>
@@ -362,6 +369,7 @@ export default function SchedulePage() {
               const [endH, endM] = slot.windowEnd.split(':').map(Number);
               return (endH * 60 + endM) - (startH * 60 + startM);
             })()}
+            discountPercent={discountPercent}
           />
         )}
       </Modal>

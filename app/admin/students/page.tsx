@@ -25,6 +25,9 @@ export default function AdminStudentsPage() {
   const [showDetails, setShowDetails] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [lessonToCancel, setLessonToCancel] = useState<Lesson | null>(null);
+  const [discountPercent, setDiscountPercent] = useState<number>(0);
+  const [isEditingDiscount, setIsEditingDiscount] = useState(false);
+  const [isSavingDiscount, setIsSavingDiscount] = useState(false);
 
   useEffect(() => {
     fetchStudents();
@@ -79,6 +82,8 @@ export default function AdminStudentsPage() {
 
   const handleViewDetails = async (student: User) => {
     setSelectedStudent(student);
+    setDiscountPercent(student.discount_percent || 0);
+    setIsEditingDiscount(false);
     setShowDetails(true);
     await fetchStudentDetails(student.id);
   };
@@ -108,17 +113,6 @@ export default function AdminStudentsPage() {
     setStudentLessons((prev) =>
       prev.map((l) => (l.id === lessonId ? { ...l, is_paid: isPaid } : l))
     );
-    setStudents((prev) =>
-      prev.map((s) => ({
-        ...s,
-        lessons: s.lessons.map((l) =>
-          l.id === lessonId ? { ...l, is_paid: isPaid } : l
-        ),
-        unpaidCount: s.lessons.filter(
-          (l) => l.id === lessonId ? !isPaid : (!l.is_paid && l.status === 'scheduled')
-        ).length,
-      }))
-    );
 
     try {
       const res = await fetch(`/api/lessons/${lessonId}`, {
@@ -127,21 +121,16 @@ export default function AdminStudentsPage() {
         body: JSON.stringify({ is_paid: isPaid }),
       });
 
-      if (!res.ok) {
+      if (res.ok) {
+        // Refetch all data to get updated paid status for recurring series
+        await fetchStudents();
+        if (selectedStudent) {
+          await fetchStudentDetails(selectedStudent.id);
+        }
+      } else {
         // Revert on failure
         setStudentLessons((prev) =>
           prev.map((l) => (l.id === lessonId ? { ...l, is_paid: !isPaid } : l))
-        );
-        setStudents((prev) =>
-          prev.map((s) => ({
-            ...s,
-            lessons: s.lessons.map((l) =>
-              l.id === lessonId ? { ...l, is_paid: !isPaid } : l
-            ),
-            unpaidCount: s.lessons.filter(
-              (l) => l.id === lessonId ? isPaid : (!l.is_paid && l.status === 'scheduled')
-            ).length,
-          }))
         );
       }
     } catch (error) {
@@ -149,17 +138,6 @@ export default function AdminStudentsPage() {
       // Revert on error
       setStudentLessons((prev) =>
         prev.map((l) => (l.id === lessonId ? { ...l, is_paid: !isPaid } : l))
-      );
-      setStudents((prev) =>
-        prev.map((s) => ({
-          ...s,
-          lessons: s.lessons.map((l) =>
-            l.id === lessonId ? { ...l, is_paid: !isPaid } : l
-          ),
-          unpaidCount: s.lessons.filter(
-            (l) => l.id === lessonId ? isPaid : (!l.is_paid && l.status === 'scheduled')
-          ).length,
-        }))
       );
     }
   };
@@ -233,6 +211,37 @@ export default function AdminStudentsPage() {
     alert(`Balance reminder would be sent to ${student.email}`);
   };
 
+  const handleSaveDiscount = async () => {
+    if (!selectedStudent) return;
+    
+    setIsSavingDiscount(true);
+    try {
+      const res = await fetch(`/api/students/${selectedStudent.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ discount_percent: discountPercent }),
+      });
+
+      if (res.ok) {
+        const updatedStudent = await res.json();
+        // Update local state
+        setSelectedStudent(updatedStudent);
+        setStudents((prev) =>
+          prev.map((s) =>
+            s.student.id === selectedStudent.id
+              ? { ...s, student: updatedStudent }
+              : s
+          )
+        );
+        setIsEditingDiscount(false);
+      }
+    } catch (error) {
+      console.error('Error saving discount:', error);
+    } finally {
+      setIsSavingDiscount(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -275,6 +284,8 @@ export default function AdminStudentsPage() {
           setSelectedStudent(null);
           setStudentLessons([]);
           setStudentNotes([]);
+          setDiscountPercent(0);
+          setIsEditingDiscount(false);
         }}
         title={selectedStudent?.full_name || selectedStudent?.email || 'Student Details'}
         size="xl"
@@ -307,6 +318,72 @@ export default function AdminStudentsPage() {
               </div>
             </div>
 
+            {/* Discount Section */}
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Discount
+                  </span>
+                  {!isEditingDiscount && (
+                    <span className={`px-2 py-0.5 text-sm font-medium rounded-full ${
+                      (selectedStudent.discount_percent || 0) > 0
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                        : 'bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
+                    }`}>
+                      {selectedStudent.discount_percent || 0}% off
+                    </span>
+                  )}
+                </div>
+                
+                {isEditingDiscount ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={discountPercent}
+                        onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                        className="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-l-md dark:bg-gray-700 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                      <span className="px-2 py-1 text-sm bg-gray-100 dark:bg-gray-600 border border-l-0 border-gray-300 dark:border-gray-600 rounded-r-md text-gray-600 dark:text-gray-300">
+                        %
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleSaveDiscount}
+                      disabled={isSavingDiscount}
+                      className="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {isSavingDiscount ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDiscountPercent(selectedStudent.discount_percent || 0);
+                        setIsEditingDiscount(false);
+                      }}
+                      className="px-3 py-1 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsEditingDiscount(true)}
+                    className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+              {(selectedStudent.discount_percent || 0) > 0 && !isEditingDiscount && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  This discount applies to current and future lessons (not past ones).
+                </p>
+              )}
+            </div>
+
             {/* Tabs */}
             <div className="border-b border-gray-200 dark:border-gray-700">
               <nav className="flex space-x-8">
@@ -326,6 +403,7 @@ export default function AdminStudentsPage() {
                     isAdmin
                     onTogglePaid={handleTogglePaid}
                     onCancel={openCancelModal}
+                    discountPercent={selectedStudent.discount_percent || 0}
                   />
                 ))
               ) : (
@@ -335,25 +413,35 @@ export default function AdminStudentsPage() {
 
             {/* Notes Section */}
             <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-              <h4 className="font-medium text-gray-900 dark:text-white mb-3">Private Notes</h4>
+              <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                📝 Private Notes
+                <span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-2">
+                  (only visible to you)
+                </span>
+              </h4>
               
               {/* Add Note */}
-              <div className="flex space-x-2 mb-4">
-                <input
-                  type="text"
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  placeholder="Add a note..."
-                  className="flex-1 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                  onKeyPress={(e) => e.key === 'Enter' && handleAddNote()}
-                />
-                <button
-                  onClick={handleAddNote}
-                  disabled={!newNote.trim()}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 disabled:opacity-50 transition-colors"
-                >
-                  Add
-                </button>
+              <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 mb-4 border border-gray-200 dark:border-gray-600">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Add a new note about this student
+                </label>
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    placeholder="e.g., Working on breath support, prefers morning lessons..."
+                    className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    onKeyPress={(e) => e.key === 'Enter' && handleAddNote()}
+                  />
+                  <button
+                    onClick={handleAddNote}
+                    disabled={!newNote.trim()}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 disabled:opacity-50 transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
               </div>
 
               {/* Notes List */}

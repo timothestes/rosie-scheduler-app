@@ -12,6 +12,7 @@ interface BookingFormProps {
   isLoading?: boolean;
   isFirstLesson?: boolean;
   maxDuration?: number; // Maximum available time in minutes for the selected slot
+  discountPercent?: number; // Student's discount percentage (0-100)
 }
 
 export interface BookingData {
@@ -31,6 +32,7 @@ export default function BookingForm({
   isLoading = false,
   isFirstLesson = false,
   maxDuration,
+  discountPercent = 0,
 }: BookingFormProps) {
   // Filter lesson types: show trial lessons only for first-time students
   // Also filter by max duration if specified
@@ -109,8 +111,23 @@ export default function BookingForm({
   // Calculate total lessons for weekly recurring
   const totalWeeklyLessons = recurringMonths * 4;
   
-  // Calculate pricing
+  // Apply discount to a rate (rounds up to nearest dollar)
+  const applyDiscount = (rate: number) => {
+    if (discountPercent <= 0) return rate;
+    return Math.ceil(rate * (1 - discountPercent / 100));
+  };
+  
+  // Calculate pricing (with discount applied)
   const getTotalPrice = () => {
+    if (!selectedLessonType) return 0;
+    if (isRecurring && !isTrialLesson) {
+      return applyDiscount(selectedLessonType.weeklyMonthlyRate * recurringMonths);
+    }
+    return applyDiscount(selectedLessonType.rate);
+  };
+  
+  // Get original price (without discount) for comparison
+  const getOriginalPrice = () => {
     if (!selectedLessonType) return 0;
     if (isRecurring && !isTrialLesson) {
       return selectedLessonType.weeklyMonthlyRate * recurringMonths;
@@ -119,6 +136,7 @@ export default function BookingForm({
   };
 
   const monthlySavings = selectedLessonType ? getWeeklySavings(selectedLessonType.id) : 0;
+  const hasDiscount = discountPercent > 0;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -174,9 +192,22 @@ export default function BookingForm({
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0 ml-4">
-                  <p className="font-medium text-gray-900 dark:text-white whitespace-nowrap">
-                    {showRecurringPrice ? `${formatRate(type.weeklyMonthlyRate)}/mo` : formatRate(type.rate)}
-                  </p>
+                  {hasDiscount ? (
+                    <div>
+                      <p className="text-sm text-gray-400 dark:text-gray-500 line-through whitespace-nowrap">
+                        {showRecurringPrice ? `${formatRate(type.weeklyMonthlyRate)}/mo` : formatRate(type.rate)}
+                      </p>
+                      <p className="font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
+                        {showRecurringPrice 
+                          ? `${formatRate(applyDiscount(type.weeklyMonthlyRate))}/mo` 
+                          : formatRate(applyDiscount(type.rate))}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="font-medium text-gray-900 dark:text-white whitespace-nowrap">
+                      {showRecurringPrice ? `${formatRate(type.weeklyMonthlyRate)}/mo` : formatRate(type.rate)}
+                    </p>
+                  )}
                   <p className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDuration(type.duration)}</p>
                 </div>
               </label>
@@ -343,11 +374,25 @@ export default function BookingForm({
       {/* Summary */}
       {selectedLessonType && (
         <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-4 border border-gray-200 dark:border-gray-600 min-h-[120px]">
+          {hasDiscount && (
+            <div className="mb-3 pb-3 border-b border-gray-200 dark:border-gray-600">
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
+                🎉 Rosie is giving you an extra {discountPercent}% off!
+              </span>
+            </div>
+          )}
           {isRecurring && !isTrialLesson ? (
             <>
               <div className="flex justify-between text-xl font-bold text-gray-900 dark:text-white">
                 <span>Monthly Rate</span>
-                <span className="text-green-600 dark:text-green-400">{formatRate(selectedLessonType.weeklyMonthlyRate)}</span>
+                <span className="text-green-600 dark:text-green-400">
+                  {hasDiscount && (
+                    <span className="text-base text-gray-400 dark:text-gray-500 line-through mr-2">
+                      {formatRate(selectedLessonType.weeklyMonthlyRate)}
+                    </span>
+                  )}
+                  {formatRate(applyDiscount(selectedLessonType.weeklyMonthlyRate))}
+                </span>
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 {totalWeeklyLessons} weekly lessons over {recurringMonths} {recurringMonths === 1 ? 'month' : 'months'}
@@ -361,7 +406,16 @@ export default function BookingForm({
           ) : (
             <div className="flex justify-between text-xl font-bold text-gray-900 dark:text-white">
               <span>Total</span>
-              <span>{formatRate(selectedLessonType.rate)}</span>
+              <span>
+                {hasDiscount && (
+                  <span className="text-base text-gray-400 dark:text-gray-500 line-through mr-2">
+                    {formatRate(selectedLessonType.rate)}
+                  </span>
+                )}
+                <span className={hasDiscount ? 'text-green-600 dark:text-green-400' : ''}>
+                  {formatRate(applyDiscount(selectedLessonType.rate))}
+                </span>
+              </span>
             </div>
           )}
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">

@@ -52,11 +52,18 @@ export default function StudentCard({
           </div>
         </div>
         
-        {unpaidCount > 0 && (
-          <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">
-            {unpaidCount} Unpaid
-          </span>
-        )}
+        <div className="flex flex-col gap-1 items-end">
+          {(student.discount_percent || 0) > 0 && (
+            <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+              {student.discount_percent}% off
+            </span>
+          )}
+          {unpaidCount > 0 && (
+            <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">
+              {unpaidCount} Unpaid
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
