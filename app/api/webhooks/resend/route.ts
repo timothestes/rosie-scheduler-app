@@ -37,24 +37,29 @@ export async function POST(request: NextRequest) {
 
       console.log(`Received email from ${data.from} to ${data.to?.join(', ')}`);
 
-      // Fetch the full email content from Resend API
-      // Note: For inbound emails, use /emails/{id} not /emails/{id}/content
-      const emailResponse = await fetch(`https://api.resend.com/emails/${emailId}`, {
+      // Fetch the full inbound email content from Resend API
+      // For inbound emails, use /emails/receiving/{id} (not /emails/{id})
+      const emailResponse = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
         headers: {
           'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
         },
       });
 
-      if (!emailResponse.ok) {
+      let emailHtml: string | null = null;
+      let emailText: string | null = null;
+
+      if (emailResponse.ok) {
+        const emailContent = await emailResponse.json();
+        console.log('Fetched inbound email content:', JSON.stringify(emailContent, null, 2));
+        emailHtml = emailContent.html || null;
+        emailText = emailContent.text || null;
+      } else {
         const errorText = await emailResponse.text();
-        console.error('Failed to fetch email content:', emailResponse.status, errorText);
-        return NextResponse.json({ error: 'Failed to fetch email', status: emailResponse.status }, { status: 500 });
+        console.error('Failed to fetch inbound email content:', emailResponse.status, errorText);
+        // Continue with forwarding even if we can't get the body
       }
 
-      const emailContent = await emailResponse.json();
-      console.log('Fetched email content:', JSON.stringify(emailContent, null, 2));
-
-      // Forward the email
+      // Forward the email with whatever content we have
       const { error } = await resend.emails.send({
         from: 'Rosie Inbox <rosie@rosielessons.com>',
         to: FORWARD_TO,
@@ -68,7 +73,7 @@ export async function POST(request: NextRequest) {
             </p>
           </div>
           <div>
-            ${emailContent.html || emailContent.text || '<p>(no content)</p>'}
+            ${emailHtml || emailText || '<p><em>(Email body not available)</em></p>'}
           </div>
         `,
         text: `
@@ -77,7 +82,7 @@ From: ${data.from}
 To: ${data.to?.join(', ')}
 Subject: ${data.subject || '(no subject)'}
 
-${emailContent.text || '(no content)'}
+${emailText || '(Email body not available)'}
         `,
       });
 
