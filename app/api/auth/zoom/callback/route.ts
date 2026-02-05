@@ -36,8 +36,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+    // Always use the production URL for OAuth callbacks (must match Zoom app settings)
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://rosielessons.com';
     const redirectUri = `${baseUrl}/api/auth/zoom/callback`;
 
     const tokens = await exchangeCodeForTokens(code, redirectUri);
