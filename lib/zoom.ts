@@ -1,16 +1,17 @@
-import { createClient } from '@/lib/supabase/server';
+/**
+ * Zoom Server-to-Server OAuth Integration
+ * 
+ * This uses Zoom's Server-to-Server OAuth which doesn't require user authorization.
+ * Meetings are created on the account that owns the Server-to-Server app.
+ * 
+ * Required env vars:
+ * - ZOOM_ACCOUNT_ID
+ * - ZOOM_CLIENT_ID
+ * - ZOOM_CLIENT_SECRET
+ */
 
-const ZOOM_OAUTH_URL = 'https://zoom.us/oauth/authorize';
 const ZOOM_TOKEN_URL = 'https://zoom.us/oauth/token';
 const ZOOM_API_URL = 'https://api.zoom.us/v2';
-
-interface ZoomToken {
-  id: string;
-  user_id: string;
-  access_token: string;
-  refresh_token: string;
-  expires_at: string;
-}
 
 interface ZoomMeeting {
   id: number;
@@ -22,220 +23,189 @@ interface ZoomMeeting {
   duration: number;
 }
 
-export function getZoomAuthUrl(redirectUri: string): string {
-  const clientId = process.env.ZOOM_CLIENT_ID;
-  if (!clientId) {
-    throw new Error('ZOOM_CLIENT_ID not configured');
-  }
+// Cache the access token in memory (server-side)
+let cachedToken: { token: string; expiresAt: number } | null = null;
 
-  const params = new URLSearchParams({
-    response_type: 'code',
-    client_id: clientId,
-    redirect_uri: redirectUri,
-  });
-
-  return `${ZOOM_OAUTH_URL}?${params.toString()}`;
-}
-
-export async function exchangeCodeForTokens(code: string, redirectUri: string): Promise<{
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-}> {
+/**
+ * Get a valid access token using Server-to-Server OAuth
+ * Tokens are cached and refreshed automatically
+ */
+async function getServerToServerToken(): Promise<string | null> {
+  const accountId = process.env.ZOOM_ACCOUNT_ID;
   const clientId = process.env.ZOOM_CLIENT_ID;
   const clientSecret = process.env.ZOOM_CLIENT_SECRET;
 
-  if (!clientId || !clientSecret) {
-    throw new Error('Zoom credentials not configured');
-  }
-
-  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-
-  const response = await fetch(ZOOM_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${credentials}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: redirectUri,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('Zoom token exchange error:', error);
-    throw new Error('Failed to exchange code for tokens');
-  }
-
-  return response.json();
-}
-
-export async function refreshZoomToken(refreshToken: string): Promise<{
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-}> {
-  const clientId = process.env.ZOOM_CLIENT_ID;
-  const clientSecret = process.env.ZOOM_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Zoom credentials not configured');
-  }
-
-  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-
-  const response = await fetch(ZOOM_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${credentials}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('Zoom token refresh error:', error);
-    throw new Error('Failed to refresh Zoom token');
-  }
-
-  return response.json();
-}
-
-async function getValidAccessToken(adminId: string): Promise<string | null> {
-  const supabase = await createClient();
-
-  console.log('Looking up zoom_tokens for user_id:', adminId);
-
-  const { data: tokenData, error } = await supabase
-    .from('zoom_tokens')
-    .select('*')
-    .eq('user_id', adminId)
-    .single();
-
-  console.log('Zoom token lookup result:', { tokenData: tokenData ? 'found' : 'not found', error });
-
-  if (!tokenData) {
+  if (!accountId || !clientId || !clientSecret) {
+    console.error('Zoom Server-to-Server credentials not configured. Need: ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET');
     return null;
   }
 
-  const expiresAt = new Date(tokenData.expires_at);
-  const now = new Date();
-
-  console.log('Token expires at:', expiresAt, 'Now:', now);
-
-  // If token expires in less than 5 minutes, refresh it
-  if (expiresAt.getTime() - now.getTime() < 5 * 60 * 1000) {
-    try {
-      console.log('Token expired or expiring soon, refreshing...');
-      const newTokens = await refreshZoomToken(tokenData.refresh_token);
-      const newExpiresAt = new Date(Date.now() + newTokens.expires_in * 1000);
-
-      await supabase
-        .from('zoom_tokens')
-        .update({
-          access_token: newTokens.access_token,
-          refresh_token: newTokens.refresh_token,
-          expires_at: newExpiresAt.toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', adminId);
-
-      return newTokens.access_token;
-    } catch (error) {
-      console.error('Failed to refresh Zoom token:', error);
-      return null;
-    }
+  // Check if we have a valid cached token (with 5 min buffer)
+  if (cachedToken && cachedToken.expiresAt > Date.now() + 5 * 60 * 1000) {
+    return cachedToken.token;
   }
 
-  return tokenData.access_token;
+  console.log('Fetching new Zoom Server-to-Server access token...');
+
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+  try {
+    const response = await fetch(ZOOM_TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'account_credentials',
+        account_id: accountId,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Zoom token error:', response.status, error);
+      return null;
+    }
+
+    const data = await response.json();
+    
+    // Cache the token
+    cachedToken = {
+      token: data.access_token,
+      expiresAt: Date.now() + (data.expires_in * 1000),
+    };
+
+    console.log('Zoom access token obtained successfully');
+    return data.access_token;
+  } catch (error) {
+    console.error('Failed to get Zoom access token:', error);
+    return null;
+  }
 }
 
-// Export the token getter for batch operations
-export async function getZoomAccessToken(adminId: string): Promise<string | null> {
-  return getValidAccessToken(adminId);
+/**
+ * Check if Zoom is configured (Server-to-Server)
+ */
+export function isZoomConfigured(): boolean {
+  return !!(
+    process.env.ZOOM_ACCOUNT_ID &&
+    process.env.ZOOM_CLIENT_ID &&
+    process.env.ZOOM_CLIENT_SECRET
+  );
 }
 
+/**
+ * Check if Zoom is connected - with Server-to-Server, it's always "connected" if configured
+ */
+export async function isZoomConnected(_adminId?: string): Promise<boolean> {
+  return isZoomConfigured();
+}
+
+/**
+ * Get Zoom access token for API calls
+ * For Server-to-Server, we don't need adminId anymore
+ */
+export async function getZoomAccessToken(_adminId?: string): Promise<string | null> {
+  return getServerToServerToken();
+}
+
+/**
+ * Create a Zoom meeting
+ */
 export async function createZoomMeeting(
-  adminId: string,
+  _adminId: string, // Kept for API compatibility, not used
   topic: string,
   startTime: Date,
   durationMinutes: number,
   agenda?: string,
-  accessToken?: string // Optional pre-fetched token for batch operations
+  accessToken?: string
 ): Promise<ZoomMeeting | null> {
-  const token = accessToken || await getValidAccessToken(adminId);
+  const token = accessToken || await getServerToServerToken();
   
   if (!token) {
-    console.log('No valid Zoom access token available');
+    console.error('No valid Zoom access token available');
     return null;
   }
 
-  const response = await fetch(`${ZOOM_API_URL}/users/me/meetings`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      topic,
-      type: 2, // Scheduled meeting
-      start_time: startTime.toISOString(),
-      duration: durationMinutes,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      agenda,
-      settings: {
-        host_video: true,
-        participant_video: true,
-        join_before_host: false,
-        mute_upon_entry: true,
-        waiting_room: true,
-        auto_recording: 'none',
+  try {
+    const response = await fetch(`${ZOOM_API_URL}/users/me/meetings`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
       },
-    }),
-  });
+      body: JSON.stringify({
+        topic,
+        type: 2, // Scheduled meeting
+        start_time: startTime.toISOString(),
+        duration: durationMinutes,
+        timezone: 'America/Los_Angeles',
+        agenda,
+        settings: {
+          host_video: true,
+          participant_video: true,
+          join_before_host: true,
+          mute_upon_entry: false,
+          waiting_room: false,
+          auto_recording: 'none',
+        },
+      }),
+    });
 
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('Failed to create Zoom meeting:', error);
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Failed to create Zoom meeting:', response.status, error);
+      return null;
+    }
+
+    const meeting = await response.json();
+    console.log('Zoom meeting created:', meeting.id);
+    return meeting;
+  } catch (error) {
+    console.error('Error creating Zoom meeting:', error);
     return null;
   }
-
-  return response.json();
 }
 
-export async function deleteZoomMeeting(adminId: string, meetingId: string): Promise<boolean> {
-  const accessToken = await getValidAccessToken(adminId);
+/**
+ * Delete a Zoom meeting
+ */
+export async function deleteZoomMeeting(_adminId: string, meetingId: string): Promise<boolean> {
+  const token = await getServerToServerToken();
   
-  if (!accessToken) {
-    console.log('No valid Zoom access token available');
+  if (!token) {
+    console.error('No valid Zoom access token available');
     return false;
   }
 
-  const response = await fetch(`${ZOOM_API_URL}/meetings/${meetingId}`, {
-    method: 'DELETE',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-    },
-  });
+  try {
+    const response = await fetch(`${ZOOM_API_URL}/meetings/${meetingId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
 
-  if (!response.ok && response.status !== 204) {
-    const error = await response.text();
-    console.error('Failed to delete Zoom meeting:', error);
+    if (!response.ok && response.status !== 204) {
+      const error = await response.text();
+      console.error('Failed to delete Zoom meeting:', response.status, error);
+      return false;
+    }
+
+    console.log('Zoom meeting deleted:', meetingId);
+    return true;
+  } catch (error) {
+    console.error('Error deleting Zoom meeting:', error);
     return false;
   }
-
-  return true;
 }
 
+/**
+ * Update a Zoom meeting
+ */
 export async function updateZoomMeeting(
-  adminId: string,
+  _adminId: string,
   meetingId: string,
   updates: {
     topic?: string;
@@ -244,45 +214,50 @@ export async function updateZoomMeeting(
     agenda?: string;
   }
 ): Promise<boolean> {
-  const accessToken = await getValidAccessToken(adminId);
+  const token = await getServerToServerToken();
   
-  if (!accessToken) {
-    console.log('No valid Zoom access token available');
+  if (!token) {
+    console.error('No valid Zoom access token available');
     return false;
   }
 
-  const body: Record<string, any> = {};
-  if (updates.topic) body.topic = updates.topic;
-  if (updates.start_time) body.start_time = updates.start_time.toISOString();
-  if (updates.duration) body.duration = updates.duration;
-  if (updates.agenda) body.agenda = updates.agenda;
+  try {
+    const body: Record<string, unknown> = {};
+    if (updates.topic) body.topic = updates.topic;
+    if (updates.start_time) body.start_time = updates.start_time.toISOString();
+    if (updates.duration) body.duration = updates.duration;
+    if (updates.agenda) body.agenda = updates.agenda;
 
-  const response = await fetch(`${ZOOM_API_URL}/meetings/${meetingId}`, {
-    method: 'PATCH',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+    const response = await fetch(`${ZOOM_API_URL}/meetings/${meetingId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
 
-  if (!response.ok && response.status !== 204) {
-    const error = await response.text();
-    console.error('Failed to update Zoom meeting:', error);
+    if (!response.ok && response.status !== 204) {
+      const error = await response.text();
+      console.error('Failed to update Zoom meeting:', response.status, error);
+      return false;
+    }
+
+    console.log('Zoom meeting updated:', meetingId);
+    return true;
+  } catch (error) {
+    console.error('Error updating Zoom meeting:', error);
     return false;
   }
-
-  return true;
 }
 
-export async function isZoomConnected(adminId: string): Promise<boolean> {
-  const supabase = await createClient();
+// Legacy functions for backwards compatibility
+/** @deprecated Use Server-to-Server OAuth - no auth URL needed */
+export function getZoomAuthUrl(_redirectUri: string): string {
+  return '';
+}
 
-  const { data } = await supabase
-    .from('zoom_tokens')
-    .select('id')
-    .eq('user_id', adminId)
-    .single();
-
-  return !!data;
+/** @deprecated Use Server-to-Server OAuth - no code exchange needed */
+export async function exchangeCodeForTokens(_code: string, _redirectUri: string): Promise<never> {
+  throw new Error('OAuth flow is deprecated - using Server-to-Server OAuth');
 }

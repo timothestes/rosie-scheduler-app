@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 
 interface ZoomStatus {
   connected: boolean;
-  expired?: boolean;
+  mode?: string;
 }
 
 export default function ZoomConnectionStatus() {
@@ -38,7 +37,7 @@ export default function ZoomConnectionStatus() {
     );
   }
 
-  if (status?.connected && !status.expired) {
+  if (status?.connected) {
     return (
       <div className="flex items-center gap-2 px-4 py-2 bg-green-100 dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-800">
         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -50,15 +49,16 @@ export default function ZoomConnectionStatus() {
     );
   }
 
+  // Not configured - show warning
   return (
-    <Link
-      href="/api/auth/zoom"
-      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-    >
-      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M4.585 4.585C1.553 7.617 1.553 12.424 4.585 15.456L7.756 12.285L4.585 9.114V4.585ZM12 1.414L8.829 4.585H15.171L12 1.414ZM19.415 4.585V9.114L16.244 12.285L19.415 15.456C22.447 12.424 22.447 7.617 19.415 4.585ZM12 22.586L15.171 19.415H8.829L12 22.586ZM12 7.414C9.477 7.414 7.414 9.477 7.414 12C7.414 14.523 9.477 16.586 12 16.586C14.523 16.586 16.586 14.523 16.586 12C16.586 9.477 14.523 7.414 12 7.414Z"/>
-      </svg>
-      {status?.expired ? 'Reconnect Zoom' : 'Connect Zoom'}
-    </Link>
+    <div className="flex items-center gap-2 px-4 py-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg border border-yellow-200 dark:border-yellow-800">
+      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+      <span className="text-yellow-700 dark:text-yellow-400 text-sm font-medium">
+        Zoom not configured
+      </span>
+      <span className="text-yellow-600 dark:text-yellow-500 text-xs">
+        (Set ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET)
+      </span>
+    </div>
   );
 }
