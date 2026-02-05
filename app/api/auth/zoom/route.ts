@@ -26,7 +26,14 @@ export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://rosielessons.com';
   const redirectUri = `${baseUrl}/api/auth/zoom/callback`;
   
+  console.log('Zoom OAuth Debug:', {
+    clientId: process.env.ZOOM_CLIENT_ID,
+    redirectUri,
+    baseUrl,
+  });
+  
   const authUrl = getZoomAuthUrl(redirectUri);
+  console.log('Generated auth URL:', authUrl);
   
   return NextResponse.redirect(authUrl);
 }
