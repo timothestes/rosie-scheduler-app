@@ -1,39 +1,15 @@
-import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { getZoomAuthUrl } from '@/lib/zoom';
+import { isZoomConfigured } from '@/lib/zoom';
 
-// GET /api/auth/zoom - Redirect to Zoom OAuth
+// GET /api/auth/zoom - Legacy OAuth route (no longer used with Server-to-Server OAuth)
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
+  // With Server-to-Server OAuth, no user authorization is needed
+  // Just check if it's configured and redirect back
+  const configured = isZoomConfigured();
   
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  if (configured) {
+    return NextResponse.redirect(new URL('/admin?zoom_info=already_configured', request.url));
+  } else {
+    return NextResponse.redirect(new URL('/admin?zoom_error=not_configured', request.url));
   }
-
-  // Check if user is admin
-  const { data: admin } = await supabase
-    .from('admins')
-    .select('id')
-    .eq('email', user.email)
-    .single();
-
-  if (!admin) {
-    return NextResponse.json({ error: 'Only admins can connect Zoom' }, { status: 403 });
-  }
-
-  // Always use the production URL for OAuth callbacks (must match Zoom app settings)
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://rosielessons.com';
-  const redirectUri = `${baseUrl}/api/auth/zoom/callback`;
-  
-  console.log('Zoom OAuth Debug:', {
-    clientId: process.env.ZOOM_CLIENT_ID,
-    redirectUri,
-    baseUrl,
-  });
-  
-  const authUrl = getZoomAuthUrl(redirectUri);
-  console.log('Generated auth URL:', authUrl);
-  
-  return NextResponse.redirect(authUrl);
 }
