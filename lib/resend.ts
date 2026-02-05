@@ -10,5 +10,5 @@ export const EMAIL_CONFIG = {
   fromEmail: process.env.RESEND_FROM_EMAIL || 'Rosie <rosie@rosielessons.com>',
   
   // Your app URL for links in emails
-  appUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://rosie-scheduler-app.vercel.app',
+  appUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://rosielessons.com',
 };
