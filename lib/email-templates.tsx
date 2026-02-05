@@ -116,7 +116,7 @@ export function LessonReminderEmail({
         {/* View Schedule Button */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <a
-            href={`${appUrl}/schedule`}
+            href={`${appUrl}/lessons`}
             style={{
               display: 'inline-block',
               backgroundColor: '#4F46E5',
@@ -170,7 +170,7 @@ export function getLessonReminderText({
     text += `Address: ${locationAddress}\n`;
   }
   
-  text += `\nView your schedule: ${appUrl}/schedule\n\n`;
+  text += `\nView your schedule: ${appUrl}/lessons\n\n`;
   text += `Need to reschedule? Please let me know as soon as possible.`;
   
   return text;

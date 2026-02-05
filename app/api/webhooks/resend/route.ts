@@ -38,18 +38,21 @@ export async function POST(request: NextRequest) {
       console.log(`Received email from ${data.from} to ${data.to?.join(', ')}`);
 
       // Fetch the full email content from Resend API
-      const emailResponse = await fetch(`https://api.resend.com/emails/${emailId}/content`, {
+      // Note: For inbound emails, use /emails/{id} not /emails/{id}/content
+      const emailResponse = await fetch(`https://api.resend.com/emails/${emailId}`, {
         headers: {
           'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
         },
       });
 
       if (!emailResponse.ok) {
-        console.error('Failed to fetch email content:', await emailResponse.text());
-        return NextResponse.json({ error: 'Failed to fetch email' }, { status: 500 });
+        const errorText = await emailResponse.text();
+        console.error('Failed to fetch email content:', emailResponse.status, errorText);
+        return NextResponse.json({ error: 'Failed to fetch email', status: emailResponse.status }, { status: 500 });
       }
 
       const emailContent = await emailResponse.json();
+      console.log('Fetched email content:', JSON.stringify(emailContent, null, 2));
 
       // Forward the email
       const { error } = await resend.emails.send({
