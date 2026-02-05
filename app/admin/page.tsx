@@ -43,9 +43,22 @@ export default async function AdminDashboard() {
     .lt('start_time', new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000).toISOString())
     .eq('status', 'scheduled');
 
-  const { count: studentCount } = await supabase
+  // Get admin emails to exclude from student count
+  const { data: admins } = await supabase
+    .from('admins')
+    .select('email');
+  const adminEmails = admins?.map((a) => a.email) || [];
+
+  // Count only students (users who are not admins)
+  let studentCountQuery = supabase
     .from('users')
     .select('*', { count: 'exact', head: true });
+  
+  if (adminEmails.length > 0) {
+    studentCountQuery = studentCountQuery.not('email', 'in', `(${adminEmails.join(',')})`);
+  }
+  
+  const { count: studentCount } = await studentCountQuery;
 
   // Get recent activity (last 5 bookings)
   const { data: recentBookings } = await supabase

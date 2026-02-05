@@ -28,6 +28,9 @@ export default function AdminStudentsPage() {
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [isEditingDiscount, setIsEditingDiscount] = useState(false);
   const [isSavingDiscount, setIsSavingDiscount] = useState(false);
+  const [studentAddress, setStudentAddress] = useState<string>('');
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
 
   useEffect(() => {
     fetchStudents();
@@ -83,7 +86,9 @@ export default function AdminStudentsPage() {
   const handleViewDetails = async (student: User) => {
     setSelectedStudent(student);
     setDiscountPercent(student.discount_percent || 0);
+    setStudentAddress(student.address || '');
     setIsEditingDiscount(false);
+    setIsEditingAddress(false);
     setShowDetails(true);
     await fetchStudentDetails(student.id);
   };
@@ -242,6 +247,37 @@ export default function AdminStudentsPage() {
     }
   };
 
+  const handleSaveAddress = async () => {
+    if (!selectedStudent) return;
+    
+    setIsSavingAddress(true);
+    try {
+      const res = await fetch(`/api/students/${selectedStudent.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: studentAddress }),
+      });
+
+      if (res.ok) {
+        const updatedStudent = await res.json();
+        // Update local state
+        setSelectedStudent(updatedStudent);
+        setStudents((prev) =>
+          prev.map((s) =>
+            s.student.id === selectedStudent.id
+              ? { ...s, student: updatedStudent }
+              : s
+          )
+        );
+        setIsEditingAddress(false);
+      }
+    } catch (error) {
+      console.error('Error saving address:', error);
+    } finally {
+      setIsSavingAddress(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -286,6 +322,8 @@ export default function AdminStudentsPage() {
           setStudentNotes([]);
           setDiscountPercent(0);
           setIsEditingDiscount(false);
+          setStudentAddress('');
+          setIsEditingAddress(false);
         }}
         title={selectedStudent?.full_name || selectedStudent?.email || 'Student Details'}
         size="xl"
@@ -382,6 +420,68 @@ export default function AdminStudentsPage() {
                   This discount applies to current and future lessons (not past ones).
                 </p>
               )}
+            </div>
+
+            {/* Address Section */}
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    📍 Address
+                  </span>
+                  {!isEditingAddress && !selectedStudent.address && (
+                    <span className="text-sm text-gray-400 dark:text-gray-500 italic">
+                      Not set
+                    </span>
+                  )}
+                </div>
+                
+                {!isEditingAddress && (
+                  <button
+                    onClick={() => setIsEditingAddress(true)}
+                    className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+              
+              {isEditingAddress ? (
+                <div className="mt-3 space-y-3">
+                  <input
+                    type="text"
+                    value={studentAddress}
+                    onChange={(e) => setStudentAddress(e.target.value)}
+                    placeholder="123 Main St, Santa Maria, CA 93454"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveAddress}
+                      disabled={isSavingAddress}
+                      className="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {isSavingAddress ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setStudentAddress(selectedStudent.address || '');
+                        setIsEditingAddress(false);
+                      }}
+                      className="px-3 py-1 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : selectedStudent.address ? (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                  {selectedStudent.address}
+                </p>
+              ) : null}
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Used for in-person lessons. Students can also set this when booking.
+              </p>
             </div>
 
             {/* Tabs */}

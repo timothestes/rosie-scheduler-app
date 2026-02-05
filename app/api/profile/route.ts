@@ -21,7 +21,7 @@ export async function GET() {
 
   const { data: profile, error } = await supabase
     .from('users')
-    .select('id, email, full_name, phone, avatar_url, discount_percent, created_at')
+    .select('id, email, full_name, phone, avatar_url, discount_percent, address, is_returning_student, created_at')
     .eq('id', user.id)
     .single();
 
@@ -33,6 +33,8 @@ export async function GET() {
       full_name: null,
       phone: null,
       discount_percent: 0,
+      address: null,
+      is_returning_student: null,
       isAdmin,
     });
   }
@@ -55,9 +57,32 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { full_name, phone } = body;
+  const { full_name, phone, is_returning_student } = body;
 
-  // Server-side validation
+  // Check if this is just a returning student status update
+  const isOnlyReturningStudentUpdate = typeof is_returning_student === 'boolean' && !full_name && !phone;
+
+  if (isOnlyReturningStudentUpdate) {
+    // Just update the returning student status
+    const { data, error } = await supabase
+      .from('users')
+      .update({
+        is_returning_student,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating profile:', error);
+      return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
+    }
+
+    return NextResponse.json(data);
+  }
+
+  // Server-side validation for full profile update
   if (!full_name || typeof full_name !== 'string') {
     return NextResponse.json({ error: 'Full name is required' }, { status: 400 });
   }
@@ -81,15 +106,22 @@ export async function PATCH(request: NextRequest) {
   }
 
   // Upsert the user profile
+  const updateData: Record<string, unknown> = {
+    id: user.id,
+    email: user.email!,
+    full_name,
+    phone,
+    updated_at: new Date().toISOString(),
+  };
+  
+  // Only include is_returning_student if explicitly provided
+  if (typeof is_returning_student === 'boolean') {
+    updateData.is_returning_student = is_returning_student;
+  }
+
   const { data, error } = await supabase
     .from('users')
-    .upsert({
-      id: user.id,
-      email: user.email!,
-      full_name,
-      phone,
-      updated_at: new Date().toISOString(),
-    }, {
+    .upsert(updateData, {
       onConflict: 'id',
     })
     .select()

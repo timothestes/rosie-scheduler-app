@@ -23,6 +23,8 @@ export default function SchedulePage() {
   const [allLessonsForScheduling, setAllLessonsForScheduling] = useState<Lesson[]>([]);
   const [lessonToCancel, setLessonToCancel] = useState<Lesson | null>(null);
   const [discountPercent, setDiscountPercent] = useState(0);
+  const [userAddress, setUserAddress] = useState('');
+  const [isReturningStudent, setIsReturningStudent] = useState<boolean | null>(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -47,6 +49,8 @@ export default function SchedulePage() {
       if (profileRes.ok) {
         const profile = await profileRes.json();
         setDiscountPercent(profile.discount_percent || 0);
+        setUserAddress(profile.address || '');
+        setIsReturningStudent(profile.is_returning_student);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -202,6 +206,7 @@ export default function SchedulePage() {
         body: JSON.stringify({
           lesson_type: data.lesson_type,
           location_type: data.location_type,
+          location_address: data.location_address,
           start_time: startTime.toISOString(),
           notes: data.notes,
           is_recurring: data.is_recurring,
@@ -251,14 +256,17 @@ export default function SchedulePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-8">Schedule a Lesson</h1>
-
+      {/* Floating Toast Notification */}
       {bookingSuccess && (
-        <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg">
-          <p className="text-green-800 dark:text-green-300 font-medium">✓ Lesson booked successfully!</p>
-          <p className="text-green-600 dark:text-green-400 text-sm">Check your email for confirmation details.</p>
+        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-2 fade-in duration-300">
+          <div className="p-4 bg-green-50 dark:bg-green-900/90 border border-green-200 dark:border-green-700 rounded-lg shadow-lg backdrop-blur-sm">
+            <p className="text-green-800 dark:text-green-200 font-medium">✓ Lesson booked successfully!</p>
+            <p className="text-green-600 dark:text-green-400 text-sm">Check your email for confirmation details.</p>
+          </div>
         </div>
       )}
+
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-8">Schedule a Lesson</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Calendar */}
@@ -361,7 +369,7 @@ export default function SchedulePage() {
               setSelectedTime(null);
             }}
             isLoading={isSubmitting}
-            isFirstLesson={lessons.length === 0}
+            isFirstLesson={lessons.length === 0 && isReturningStudent === false}
             maxDuration={(() => {
               const slot = timeSlots.find(s => s.start === selectedTime);
               if (!slot?.windowEnd) return undefined;
@@ -370,6 +378,7 @@ export default function SchedulePage() {
               return (endH * 60 + endM) - (startH * 60 + startM);
             })()}
             discountPercent={discountPercent}
+            defaultAddress={userAddress}
           />
         )}
       </Modal>

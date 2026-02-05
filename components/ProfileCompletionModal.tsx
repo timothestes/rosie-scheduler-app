@@ -6,16 +6,21 @@ interface ProfileCompletionModalProps {
   isOpen: boolean;
   onComplete: () => void;
   userEmail: string;
+  showReturningStudentQuestion?: boolean;
+  isProfileComplete?: boolean;
 }
 
 export default function ProfileCompletionModal({
   isOpen,
   onComplete,
   userEmail,
+  showReturningStudentQuestion = false,
+  isProfileComplete = false,
 }: ProfileCompletionModalProps) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
+  const [isReturningStudent, setIsReturningStudent] = useState<boolean | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,6 +32,37 @@ export default function ProfileCompletionModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // If only showing returning student question (profile is complete)
+    if (isProfileComplete && showReturningStudentQuestion) {
+      if (isReturningStudent === null) {
+        setError('Please let us know if you have taken lessons with Rosie before');
+        return;
+      }
+
+      setIsSubmitting(true);
+      try {
+        const res = await fetch('/api/profile', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            is_returning_student: isReturningStudent,
+          }),
+        });
+
+        if (res.ok) {
+          onComplete();
+        } else {
+          const data = await res.json();
+          setError(data.error || 'Failed to save');
+        }
+      } catch (err) {
+        setError('An error occurred. Please try again.');
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
 
     const trimmedFirst = firstName.trim();
     const trimmedLast = lastName.trim();
@@ -66,6 +102,12 @@ export default function ProfileCompletionModal({
       return;
     }
 
+    // Validate returning student question if shown
+    if (showReturningStudentQuestion && isReturningStudent === null) {
+      setError('Please let us know if you have taken lessons with Rosie before');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -75,6 +117,7 @@ export default function ProfileCompletionModal({
         body: JSON.stringify({
           full_name: `${firstName.trim()} ${lastName.trim()}`,
           phone: phone.trim(),
+          ...(showReturningStudentQuestion && { is_returning_student: isReturningStudent }),
         }),
       });
 
@@ -107,6 +150,82 @@ export default function ProfileCompletionModal({
   };
 
   if (!isOpen) return null;
+
+  // If profile is complete but we need to ask about returning student
+  if (isProfileComplete && showReturningStudentQuestion) {
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto">
+        {/* Backdrop - no click handler to prevent closing */}
+        <div className="fixed inset-0 bg-black/50" />
+        
+        {/* Modal */}
+        <div className="flex min-h-full items-center justify-center p-4">
+          <div className="relative w-full max-w-md transform overflow-hidden rounded-xl bg-white dark:bg-gray-800 shadow-xl">
+            {/* Header */}
+            <div className="px-6 pt-6 pb-4 border-b dark:border-gray-700">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Welcome! 👋</h2>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">One quick question before you get started</p>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Have you taken voice lessons with Rosie before?
+                </label>
+                <div className="space-y-2">
+                  <label className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${
+                    isReturningStudent === true 
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' 
+                      : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="returningStudent"
+                      value="yes"
+                      checked={isReturningStudent === true}
+                      onChange={() => setIsReturningStudent(true)}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="ml-3 text-gray-900 dark:text-white">Yes, I&apos;m a returning student</span>
+                  </label>
+                  <label className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${
+                    isReturningStudent === false 
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' 
+                      : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="returningStudent"
+                      value="no"
+                      checked={isReturningStudent === false}
+                      onChange={() => setIsReturningStudent(false)}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="ml-3 text-gray-900 dark:text-white">No, I&apos;m new here!</span>
+                  </label>
+                </div>
+              </div>
+
+              {error && (
+                <div className="rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2">
+                  <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isSubmitting || isReturningStudent === null}
+                className="w-full px-4 py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isSubmitting ? 'Saving...' : 'Continue'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -181,6 +300,47 @@ export default function ProfileCompletionModal({
                 Used for lesson reminders and updates
               </p>
             </div>
+
+            {/* Returning student question */}
+            {showReturningStudentQuestion && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Have you taken voice lessons with Rosie before? <span className="text-red-500">*</span>
+                </label>
+                <div className="space-y-2">
+                  <label className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${
+                    isReturningStudent === true 
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' 
+                      : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="returningStudent"
+                      value="yes"
+                      checked={isReturningStudent === true}
+                      onChange={() => setIsReturningStudent(true)}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="ml-3 text-gray-900 dark:text-white">Yes, I&apos;m a returning student</span>
+                  </label>
+                  <label className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${
+                    isReturningStudent === false 
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' 
+                      : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="returningStudent"
+                      value="no"
+                      checked={isReturningStudent === false}
+                      onChange={() => setIsReturningStudent(false)}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="ml-3 text-gray-900 dark:text-white">No, I&apos;m new here!</span>
+                  </label>
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2">

@@ -1,8 +1,10 @@
-import { signInWithGoogle } from "./actions"
+import { signInWithGoogle, signInWithEmail, signUpWithEmail } from "./actions"
 import DarkModeToggle from "@/components/DarkModeToggle"
 
 export default async function Login({ searchParams }: { searchParams: Promise<{ message: string }> }) {
   const params = await searchParams
+  const isSuccess = params?.message?.includes('Check your email')
+  
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center p-4">
       {/* Dark Mode Toggle */}
@@ -23,6 +25,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
             Sign in to continue
           </h2>
 
+          {/* Google Sign In */}
           <form>
             <button
               formAction={signInWithGoogle}
@@ -38,9 +41,72 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
             </button>
           </form>
 
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">or continue with email</span>
+            </div>
+          </div>
+
+          {/* Email/Password Form */}
+          <form className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Email
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder="you@example.com"
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Password
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                minLength={6}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder="••••••••"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                formAction={signInWithEmail}
+                className="flex-1 bg-indigo-600 text-white rounded-lg px-4 py-2.5 font-medium hover:bg-indigo-700 transition-colors"
+              >
+                Sign In
+              </button>
+              <button
+                formAction={signUpWithEmail}
+                className="flex-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors border border-gray-300 dark:border-gray-600"
+              >
+                Sign Up
+              </button>
+            </div>
+          </form>
+
           {params?.message && (
-            <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
-              <p className="text-red-700 dark:text-red-300 text-center text-sm">{params.message}</p>
+            <div className={`mt-4 p-4 rounded-lg border ${
+              isSuccess 
+                ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800' 
+                : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
+            }`}>
+              <p className={`text-center text-sm ${
+                isSuccess 
+                  ? 'text-green-700 dark:text-green-300' 
+                  : 'text-red-700 dark:text-red-300'
+              }`}>{params.message}</p>
             </div>
           )}
         </div>

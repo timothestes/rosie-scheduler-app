@@ -181,10 +181,6 @@ make build
 
 
 ## Outstanding Questions
-- Do we want to support non-gmail sign ins?
-- How would you like to onboard current students?
-- How important are reminders to you?
-- Would you prefer text or email reminders?
 - Sibling Student 
-- Add option for returning students
-- Add option to put in address
+
+## Still TODOs:

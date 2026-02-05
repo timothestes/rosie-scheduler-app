@@ -3,6 +3,7 @@
 import { formatTime24to12 } from '@/lib/utils';
 import type { TimeSlot, Lesson } from '@/types';
 import { getLessonType } from '@/config/lessonTypes';
+import { commuteConfig } from '@/config/commute';
 
 interface TimeSlotPickerProps {
   slots: TimeSlot[];
@@ -48,11 +49,26 @@ export default function TimeSlotPicker({
     const slotStart = new Date(baseDate);
     slotStart.setHours(hours, minutes, 0, 0);
     const slotEnd = new Date(slotStart.getTime() + lessonDuration * 60 * 1000);
+    
+    // Commute buffer in milliseconds
+    const bufferMs = commuteConfig.bufferMinutes * 60 * 1000;
 
     return lessons.some((lesson) => {
       if (lesson.status === 'cancelled') return false;
       const lessonStart = new Date(lesson.start_time);
       const lessonEnd = new Date(lesson.end_time);
+      
+      // If the existing lesson is in-person AND it's not the user's own lesson,
+      // add buffer before and after it. User's own lessons don't need buffer
+      // since they're at the same location (no commute needed for back-to-back).
+      const isOwnLesson = (lesson as Lesson & { is_own_lesson?: boolean }).is_own_lesson;
+      if (lesson.location_type === 'in-person' && !isOwnLesson) {
+        const bufferedLessonStart = new Date(lessonStart.getTime() - bufferMs);
+        const bufferedLessonEnd = new Date(lessonEnd.getTime() + bufferMs);
+        return slotStart < bufferedLessonEnd && slotEnd > bufferedLessonStart;
+      }
+      
+      // For zoom lessons or user's own in-person lessons, just check normal overlap
       return slotStart < lessonEnd && slotEnd > lessonStart;
     });
   };

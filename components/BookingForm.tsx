@@ -13,11 +13,13 @@ interface BookingFormProps {
   isFirstLesson?: boolean;
   maxDuration?: number; // Maximum available time in minutes for the selected slot
   discountPercent?: number; // Student's discount percentage (0-100)
+  defaultAddress?: string; // Pre-fill address from user profile
 }
 
 export interface BookingData {
   lesson_type: string;
   location_type: 'in-person' | 'zoom';
+  location_address?: string; // Student address for in-person lessons
   notes: string;
   is_recurring: boolean;
   recurring_frequency?: 'weekly';
@@ -33,6 +35,7 @@ export default function BookingForm({
   isFirstLesson = false,
   maxDuration,
   discountPercent = 0,
+  defaultAddress = '',
 }: BookingFormProps) {
   // Filter lesson types: show trial lessons only for first-time students
   // Also filter by max duration if specified
@@ -44,13 +47,22 @@ export default function BookingForm({
   
   const [lessonType, setLessonType] = useState(availableLessonTypes[0]?.id || lessonTypes[0].id);
   const [locationType, setLocationType] = useState<'in-person' | 'zoom'>('zoom');
+  const [locationAddress, setLocationAddress] = useState(defaultAddress);
   const [notes, setNotes] = useState('');
   const [agreedToPolicy, setAgreedToPolicy] = useState(false);
+  const [policyNeedsAttention, setPolicyNeedsAttention] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringMonths, setRecurringMonths] = useState(1);
 
   const selectedLessonType = getLessonType(lessonType);
   const isTrialLesson = selectedLessonType?.isTrialLesson ?? false;
+  
+  // Sync address when defaultAddress loads (from profile fetch)
+  useEffect(() => {
+    if (defaultAddress && !locationAddress) {
+      setLocationAddress(defaultAddress);
+    }
+  }, [defaultAddress, locationAddress]);
   
   // Reset recurring if user selects a trial lesson
   useEffect(() => {
@@ -70,6 +82,7 @@ export default function BookingForm({
     await onSubmit({
       lesson_type: lessonType,
       location_type: locationType,
+      location_address: locationType === 'in-person' ? locationAddress : undefined,
       notes,
       is_recurring: isRecurring && !isTrialLesson,
       recurring_frequency: isRecurring && !isTrialLesson ? 'weekly' : undefined,
@@ -324,10 +337,29 @@ export default function BookingForm({
           </label>
         </div>
         {locationType === 'in-person' && (
-          <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-            <p className="text-sm text-amber-800 dark:text-amber-200">
-              <span className="font-medium">Central Coast area only.</span> If you live further than 20 minutes from Santa Maria/Orcutt, a travel fee of $10–$15 may apply.
-            </p>
+          <div className="mt-3 space-y-3">
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                <span className="font-medium">Central Coast area only.</span> If you live further than 20 minutes from Santa Maria/Orcutt, a travel fee of $10–$15 may apply.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="locationAddress" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Your Address
+              </label>
+              <input
+                type="text"
+                id="locationAddress"
+                value={locationAddress}
+                onChange={(e) => setLocationAddress(e.target.value)}
+                maxLength={100}
+                className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                placeholder="123 Main St, Santa Maria, CA 93454"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Please provide your full address so Rosie knows where to meet you. ({100 - locationAddress.length} characters remaining)
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -358,14 +390,27 @@ export default function BookingForm({
             </li>
           ))}
         </ul>
-        <label className="flex items-center mt-4 p-2 -mx-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600/50 cursor-pointer transition-colors">
+        <label className={`flex items-center mt-4 p-2 -mx-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600/50 cursor-pointer transition-all duration-300 ${
+          policyNeedsAttention 
+            ? 'bg-red-50 dark:bg-red-900/20 ring-2 ring-red-400 dark:ring-red-500 animate-pulse' 
+            : ''
+        }`}>
           <input
             type="checkbox"
             checked={agreedToPolicy}
-            onChange={(e) => setAgreedToPolicy(e.target.checked)}
-            className="rounded border-gray-300 dark:border-gray-500 dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500 h-5 w-5"
+            onChange={(e) => {
+              setAgreedToPolicy(e.target.checked);
+              if (e.target.checked) setPolicyNeedsAttention(false);
+            }}
+            className={`rounded border-gray-300 dark:border-gray-500 dark:bg-gray-600 text-indigo-600 focus:ring-indigo-500 h-5 w-5 ${
+              policyNeedsAttention ? 'border-red-400 dark:border-red-500' : ''
+            }`}
           />
-          <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+          <span className={`ml-2 text-sm transition-colors duration-300 ${
+            policyNeedsAttention 
+              ? 'text-red-600 dark:text-red-400 font-medium' 
+              : 'text-gray-700 dark:text-gray-300'
+          }`}>
             I agree to the cancellation policy
           </span>
         </label>
@@ -435,13 +480,26 @@ export default function BookingForm({
         >
           Cancel
         </button>
-        <button
-          type="submit"
-          disabled={isLoading || !agreedToPolicy}
-          className="flex-1 px-4 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl disabled:shadow-none"
+        {/* Wrapper div to capture clicks on disabled button */}
+        <div 
+          className="flex-1 cursor-pointer"
+          onClick={() => {
+            if (!agreedToPolicy && !isLoading) {
+              setPolicyNeedsAttention(true);
+              setTimeout(() => setPolicyNeedsAttention(false), 2000);
+            }
+          }}
         >
-          {isLoading ? 'Booking...' : isRecurring ? `Book ${totalWeeklyLessons} Lessons` : 'Book Lesson'}
-        </button>
+          <button
+            type="submit"
+            disabled={isLoading || !agreedToPolicy}
+            className={`w-full px-4 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl disabled:shadow-none ${
+              !agreedToPolicy && !isLoading ? 'pointer-events-none' : ''
+            }`}
+          >
+            {isLoading ? 'Booking...' : isRecurring ? `Book ${totalWeeklyLessons} Lessons` : 'Book Lesson'}
+          </button>
+        </div>
       </div>
     </form>
   );

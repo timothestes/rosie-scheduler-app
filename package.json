@@ -6,6 +6,8 @@
     "start": "next start"
   },
   "dependencies": {
+    "@react-email/components": "^1.0.7",
+    "@react-email/render": "^2.0.4",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
     "autoprefixer": "10.4.17",
@@ -14,6 +16,8 @@
     "postcss": "8.4.33",
     "react": "18.2.0",
     "react-dom": "18.2.0",
+    "resend": "^6.9.1",
+    "svix": "^1.84.1",
     "tailwindcss": "3.4.1",
     "typescript": "5.3.3"
   },

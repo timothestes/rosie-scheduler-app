@@ -82,7 +82,7 @@ export async function PATCH(
   }
 
   const body = await request.json();
-  const { discount_percent } = body;
+  const { discount_percent, address } = body;
 
   // Validate discount_percent if provided
   if (discount_percent !== undefined) {
@@ -95,12 +95,16 @@ export async function PATCH(
   }
 
   // Update student
-  const updateData: { discount_percent?: number; updated_at: string } = {
+  const updateData: { discount_percent?: number; address?: string | null; updated_at: string } = {
     updated_at: new Date().toISOString(),
   };
 
   if (discount_percent !== undefined) {
     updateData.discount_percent = discount_percent;
+  }
+
+  if (address !== undefined) {
+    updateData.address = address || null;
   }
 
   const { data: student, error } = await supabase

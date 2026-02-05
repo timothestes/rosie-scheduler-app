@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { formatDate, formatTimeRange, generateGoogleCalendarUrl } from '@/lib/utils';
 import { getLessonType, formatRate, getWeeklyPerLessonRate } from '@/config/lessonTypes';
 import type { Lesson } from '@/types';
@@ -26,6 +27,15 @@ export default function LessonCard({
   const endTime = new Date(lesson.end_time);
   const isPast = startTime < new Date();
   const isCancelled = lesson.status === 'cancelled';
+  const [addressCopied, setAddressCopied] = useState(false);
+  
+  const copyAddress = async () => {
+    if (lesson.location_address) {
+      await navigator.clipboard.writeText(lesson.location_address);
+      setAddressCopied(true);
+      setTimeout(() => setAddressCopied(false), 2000);
+    }
+  };
   
   // Calculate discounted rate (rounds up to nearest dollar)
   const originalRate = lessonType?.rate ?? 0;
@@ -120,6 +130,35 @@ export default function LessonCard({
           </span>
         )}
       </div>
+
+      {/* Address section for in-person lessons */}
+      {lesson.location_type === 'in-person' && lesson.location_address && (
+        <div className="mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+          <div className="flex items-start justify-between gap-2">
+            <p 
+              className="text-sm text-gray-700 dark:text-gray-300 flex-1 line-clamp-2"
+              title={lesson.location_address}
+            >
+              {lesson.location_address}
+            </p>
+            <button
+              onClick={copyAddress}
+              className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors flex-shrink-0"
+              title="Copy address"
+            >
+              {addressCopied ? (
+                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* Payment toggle - separate row for consistent layout */}
       {isAdmin && onTogglePaid && !isCancelled && (

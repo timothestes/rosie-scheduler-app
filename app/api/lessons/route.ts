@@ -4,6 +4,7 @@ import { getLessonDuration, getLessonType } from '@/config/lessonTypes';
 import { createZoomMeeting, getZoomAccessToken } from '@/lib/zoom';
 import { createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { getPrimaryAdminEmail } from '@/lib/utils';
+import { commuteConfig } from '@/config/commute';
 
 // GET /api/lessons - Get lessons
 export async function GET(request: NextRequest) {
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { lesson_type, location_type, start_time, notes, is_recurring, recurring_frequency, recurring_months } = body;
+  const { lesson_type, location_type, location_address, start_time, notes, is_recurring, recurring_frequency, recurring_months } = body;
 
   // Calculate end time based on lesson type duration
   const duration = getLessonDuration(lesson_type);
@@ -154,29 +155,66 @@ export async function POST(request: NextRequest) {
   }
 
   // Check for conflicts on all dates
+  // For in-person lessons by OTHER students, add commute buffer time before and after
+  // User's own back-to-back in-person lessons are allowed (same location, no commute)
+  const bufferMs = commuteConfig.bufferMinutes * 60 * 1000;
+  
   for (const date of lessonDates) {
     const lessonEnd = new Date(date.getTime() + duration * 60 * 1000);
-    const { data: conflicts } = await supabase
+    
+    // First check for exact overlaps (applies to all lessons)
+    const { data: exactConflicts } = await supabase
       .from('lessons')
-      .select('id')
+      .select('id, location_type, student_id')
       .neq('status', 'cancelled')
       .lt('start_time', lessonEnd.toISOString())
       .gt('end_time', date.toISOString());
 
-    if (conflicts && conflicts.length > 0) {
+    if (exactConflicts && exactConflicts.length > 0) {
       return NextResponse.json(
         { error: `Time slot conflict on ${date.toLocaleDateString()}` },
         { status: 409 }
       );
+    }
+
+    // Now check for buffer conflicts with OTHER students' in-person lessons
+    // Only apply buffer if the new lesson is in-person OR conflicts with someone else's in-person lesson
+    if (location_type === 'in-person') {
+      const conflictStart = new Date(date.getTime() - bufferMs);
+      const conflictEnd = new Date(lessonEnd.getTime() + bufferMs);
+      
+      const { data: bufferConflicts } = await supabase
+        .from('lessons')
+        .select('id, location_type, student_id')
+        .neq('status', 'cancelled')
+        .neq('student_id', user.id) // Exclude user's own lessons - they can book back-to-back
+        .eq('location_type', 'in-person') // Only in-person lessons need buffer
+        .lt('start_time', conflictEnd.toISOString())
+        .gt('end_time', conflictStart.toISOString());
+
+      if (bufferConflicts && bufferConflicts.length > 0) {
+        return NextResponse.json(
+          { error: `Time slot conflict on ${date.toLocaleDateString()}. A ${commuteConfig.bufferMinutes}-minute buffer is required between in-person lessons with different students for travel time.` },
+          { status: 409 }
+        );
+      }
     }
   }
 
   // Get student info for calendar events
   const { data: studentInfo } = await supabase
     .from('users')
-    .select('full_name, email')
+    .select('full_name, email, address')
     .eq('id', user.id)
     .single();
+
+  // If booking an in-person lesson with an address, save it to the user's profile
+  if (location_type === 'in-person' && location_address && location_address.trim()) {
+    await supabase
+      .from('users')
+      .update({ address: location_address.trim(), updated_at: new Date().toISOString() })
+      .eq('id', user.id);
+  }
 
   const lessonTypeInfo = getLessonType(lesson_type);
   const studentName = studentInfo?.full_name || studentInfo?.email || 'Student';
@@ -228,13 +266,17 @@ export async function POST(request: NextRequest) {
         ? `${recurringLabel}: ${lessonTypeInfo?.name || 'Lesson'} with ${studentName}`
         : `${lessonTypeInfo?.name || 'Lesson'} with ${studentName}`;
       
+      const locationDisplay = location_type === 'zoom' 
+        ? (zoomJoinUrl || 'Zoom')
+        : (location_address || 'In-Person');
+      
       const calendarEvent = await createGoogleCalendarEvent(
         adminId,
         eventTitle,
-        `Lesson Type: ${lessonTypeInfo?.name}\nStudent: ${studentName}${notes ? `\nNotes: ${notes}` : ''}${zoomJoinUrl ? `\nZoom: ${zoomJoinUrl}` : ''}${is_recurring ? `\nRecurring: ${i + 1} of ${lessonDates.length}` : ''}`,
+        `Lesson Type: ${lessonTypeInfo?.name}\nStudent: ${studentName}${location_type === 'in-person' && location_address ? `\nAddress: ${location_address}` : ''}${notes ? `\nNotes: ${notes}` : ''}${zoomJoinUrl ? `\nZoom: ${zoomJoinUrl}` : ''}${is_recurring ? `\nRecurring: ${i + 1} of ${lessonDates.length}` : ''}`,
         lessonStart,
         lessonEnd,
-        location_type === 'zoom' ? zoomJoinUrl || 'Zoom' : 'In-Person'
+        locationDisplay
       );
 
       if (calendarEvent) {
@@ -249,6 +291,7 @@ export async function POST(request: NextRequest) {
         admin_id: adminId,
         lesson_type,
         location_type,
+        location_address: location_type === 'in-person' ? location_address : null,
         start_time: lessonStart.toISOString(),
         end_time: lessonEnd.toISOString(),
         notes,

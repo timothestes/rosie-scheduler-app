@@ -279,13 +279,16 @@ RETURNS TABLE (
   start_time TIMESTAMPTZ,
   end_time TIMESTAMPTZ,
   lesson_type TEXT,
-  status TEXT
+  location_type TEXT,
+  status TEXT,
+  is_own_lesson BOOLEAN
 ) 
 SECURITY DEFINER
 AS $$
 BEGIN
   RETURN QUERY
-  SELECT l.id, l.start_time, l.end_time, l.lesson_type, l.status
+  SELECT l.id, l.start_time, l.end_time, l.lesson_type, l.location_type, l.status,
+         (l.student_id = auth.uid()) AS is_own_lesson
   FROM lessons l
   WHERE l.status != 'cancelled'
     AND l.start_time >= start_date

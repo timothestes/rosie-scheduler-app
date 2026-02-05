@@ -5,7 +5,9 @@ export interface User {
   full_name: string | null;
   avatar_url: string | null;
   phone: string | null;
+  address: string | null; // Student address for in-person lessons
   discount_percent: number; // 0-100 percentage discount on lesson fees
+  is_returning_student: boolean | null; // null = not yet asked, true = returning student (no first lesson discount), false = new student
   created_at: string;
   updated_at: string;
 }
@@ -53,6 +55,7 @@ export interface Lesson {
   admin_id: string | null;
   lesson_type: string;
   location_type: 'in-person' | 'zoom';
+  location_address: string | null; // Student address for in-person lessons
   start_time: string; // ISO 8601
   end_time: string;
   status: 'scheduled' | 'completed' | 'cancelled';
@@ -67,6 +70,8 @@ export interface Lesson {
   zoom_join_url: string | null;
   is_recurring: boolean;
   recurring_series_id: string | null;
+  reminder_24h_sent_at: string | null;
+  reminder_1h_sent_at: string | null;
   created_at: string;
   updated_at: string;
   // Joined fields
