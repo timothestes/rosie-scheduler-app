@@ -5,6 +5,7 @@ import StudentCard from '@/components/StudentCard';
 import Modal from '@/components/Modal';
 import LessonCard from '@/components/LessonCard';
 import CancelLessonModal from '@/components/CancelLessonModal';
+import SendReminderModal from '@/components/SendReminderModal';
 import { formatDate } from '@/lib/utils';
 import { getLessonType } from '@/config/lessonTypes';
 import type { User, Lesson, StudentNote } from '@/types';
@@ -31,6 +32,10 @@ export default function AdminStudentsPage() {
   const [studentAddress, setStudentAddress] = useState<string>('');
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
+  const [reminderModalOpen, setReminderModalOpen] = useState(false);
+  const [reminderStudent, setReminderStudent] = useState<User | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [lessonFilter, setLessonFilter] = useState<'all' | 'upcoming' | 'completed' | 'cancelled' | 'unpaid'>('all');
 
   useEffect(() => {
     fetchStudents();
@@ -51,7 +56,7 @@ export default function AdminStudentsPage() {
         const studentsWithLessons = studentsData.map((student) => {
           const studentLessons = lessonsData.filter((l) => l.student_id === student.id);
           const unpaidCount = studentLessons.filter(
-            (l) => !l.is_paid && l.status === 'scheduled'
+            (l) => !l.is_paid && l.status === 'scheduled' && new Date(l.start_time) < new Date()
           ).length;
 
           return {
@@ -71,6 +76,7 @@ export default function AdminStudentsPage() {
   };
 
   const fetchStudentDetails = async (studentId: string) => {
+    setIsLoadingDetails(true);
     try {
       const res = await fetch(`/api/students/${studentId}`);
       if (res.ok) {
@@ -80,6 +86,8 @@ export default function AdminStudentsPage() {
       }
     } catch (error) {
       console.error('Error fetching student details:', error);
+    } finally {
+      setIsLoadingDetails(false);
     }
   };
 
@@ -89,6 +97,10 @@ export default function AdminStudentsPage() {
     setStudentAddress(student.address || '');
     setIsEditingDiscount(false);
     setIsEditingAddress(false);
+    setLessonFilter('all'); // Reset filter to 'all'
+    // Clear previous student's data to prevent showing stale data
+    setStudentLessons([]);
+    setStudentNotes([]);
     setShowDetails(true);
     await fetchStudentDetails(student.id);
   };
@@ -114,9 +126,32 @@ export default function AdminStudentsPage() {
   };
 
   const handleTogglePaid = async (lessonId: string, isPaid: boolean) => {
-    // Optimistic update - update UI immediately
+    if (!selectedStudent) return;
+
+    // Optimistic update - update UI immediately (modal lessons)
     setStudentLessons((prev) =>
       prev.map((l) => (l.id === lessonId ? { ...l, is_paid: isPaid } : l))
+    );
+
+    // Optimistic update - update unpaid count on student card
+    setStudents((prev) =>
+      prev.map((s) => {
+        if (s.student.id === selectedStudent.id) {
+          // Recalculate unpaid count based on the update
+          const updatedLessons = s.lessons.map((l) =>
+            l.id === lessonId ? { ...l, is_paid: isPaid } : l
+          );
+          const newUnpaidCount = updatedLessons.filter(
+            (l) => !l.is_paid && l.status === 'scheduled' && new Date(l.start_time) < new Date()
+          ).length;
+          return {
+            ...s,
+            lessons: updatedLessons,
+            unpaidCount: newUnpaidCount,
+          };
+        }
+        return s;
+      })
     );
 
     try {
@@ -126,16 +161,28 @@ export default function AdminStudentsPage() {
         body: JSON.stringify({ is_paid: isPaid }),
       });
 
-      if (res.ok) {
-        // Refetch all data to get updated paid status for recurring series
-        await fetchStudents();
-        if (selectedStudent) {
-          await fetchStudentDetails(selectedStudent.id);
-        }
-      } else {
+      if (!res.ok) {
         // Revert on failure
         setStudentLessons((prev) =>
           prev.map((l) => (l.id === lessonId ? { ...l, is_paid: !isPaid } : l))
+        );
+        setStudents((prev) =>
+          prev.map((s) => {
+            if (s.student.id === selectedStudent.id) {
+              const revertedLessons = s.lessons.map((l) =>
+                l.id === lessonId ? { ...l, is_paid: !isPaid } : l
+              );
+              const newUnpaidCount = revertedLessons.filter(
+                (l) => !l.is_paid && l.status === 'scheduled' && new Date(l.start_time) < new Date()
+              ).length;
+              return {
+                ...s,
+                lessons: revertedLessons,
+                unpaidCount: newUnpaidCount,
+              };
+            }
+            return s;
+          })
         );
       }
     } catch (error) {
@@ -143,6 +190,24 @@ export default function AdminStudentsPage() {
       // Revert on error
       setStudentLessons((prev) =>
         prev.map((l) => (l.id === lessonId ? { ...l, is_paid: !isPaid } : l))
+      );
+      setStudents((prev) =>
+        prev.map((s) => {
+          if (s.student.id === selectedStudent.id) {
+            const revertedLessons = s.lessons.map((l) =>
+              l.id === lessonId ? { ...l, is_paid: !isPaid } : l
+            );
+            const newUnpaidCount = revertedLessons.filter(
+              (l) => !l.is_paid && l.status === 'scheduled' && new Date(l.start_time) < new Date()
+            ).length;
+            return {
+              ...s,
+              lessons: revertedLessons,
+              unpaidCount: newUnpaidCount,
+            };
+          }
+          return s;
+        })
       );
     }
   };
@@ -211,9 +276,14 @@ export default function AdminStudentsPage() {
     ).length;
   };
 
-  const handleSendReminder = async (student: User) => {
-    // Placeholder for email reminder functionality
-    alert(`Balance reminder would be sent to ${student.email}`);
+  const handleSendReminder = (student: User) => {
+    setReminderStudent(student);
+    setReminderModalOpen(true);
+  };
+
+  const handleReminderSuccess = () => {
+    // Optionally refresh student data
+    fetchStudents();
   };
 
   const handleSaveDiscount = async () => {
@@ -415,10 +485,27 @@ export default function AdminStudentsPage() {
                   </button>
                 )}
               </div>
+              {isEditingDiscount && discountPercent > 0 && (
+                <div className="mt-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                  <p className="text-sm text-green-800 dark:text-green-300 font-medium">
+                    {discountPercent}% off of $40 = ${Math.ceil(40 * (1 - discountPercent / 100))}
+                  </p>
+                  <p className="text-xs text-green-700 dark:text-green-400 mt-0.5">
+                    Rounded up to nearest dollar (customer-friendly)
+                  </p>
+                </div>
+              )}
               {(selectedStudent.discount_percent || 0) > 0 && !isEditingDiscount && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  This discount applies to current and future lessons (not past ones).
-                </p>
+                <div className="mt-3 space-y-2">
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
+                    <p className="text-sm text-green-800 dark:text-green-300 font-medium">
+                      30-min lessons: ${Math.ceil(40 * (1 - (selectedStudent.discount_percent || 0) / 100))} each
+                    </p>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    This discount applies to current and future lessons (not past ones).
+                  </p>
+                </div>
               )}
             </div>
 
@@ -484,31 +571,119 @@ export default function AdminStudentsPage() {
               </p>
             </div>
 
-            {/* Tabs */}
+            {/* Lesson Filters */}
             <div className="border-b border-gray-200 dark:border-gray-700">
-              <nav className="flex space-x-8">
-                <button className="py-2 px-1 border-b-2 border-indigo-500 font-medium text-indigo-600 dark:text-indigo-400">
-                  Lessons ({studentLessons.length})
-                </button>
+              <nav className="flex space-x-1 overflow-x-auto">
+                {(() => {
+                  const now = new Date();
+
+                  // Calculate counts including in-progress and past scheduled lessons for completed
+                  const completedCount = studentLessons.filter(l => {
+                    if (l.status === 'completed') return true;
+
+                    // Check if lesson is in progress or has ended
+                    const startTime = new Date(l.start_time);
+                    const lessonType = getLessonType(l.lesson_type);
+                    const durationMinutes = lessonType?.duration ?? 60;
+                    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+                    const isInProgress = startTime <= now && endTime > now && l.status === 'scheduled';
+                    const hasPassed = endTime <= now && l.status === 'scheduled';
+
+                    return isInProgress || hasPassed;
+                  }).length;
+
+                  return [
+                    { key: 'all', label: 'All', count: studentLessons.length },
+                    {
+                      key: 'upcoming',
+                      label: 'Upcoming',
+                      count: studentLessons.filter(l => new Date(l.start_time) > now && l.status === 'scheduled').length
+                    },
+                    {
+                      key: 'unpaid',
+                      label: 'Unpaid',
+                      count: studentLessons.filter(l => !l.is_paid && l.status === 'scheduled').length
+                    },
+                    {
+                      key: 'completed',
+                      label: 'Completed',
+                      count: completedCount
+                    },
+                    {
+                      key: 'cancelled',
+                      label: 'Cancelled',
+                      count: studentLessons.filter(l => l.status === 'cancelled').length
+                    },
+                  ];
+                })().map(({ key, label, count }) => (
+                  <button
+                    key={key}
+                    onClick={() => setLessonFilter(key as typeof lessonFilter)}
+                    className={`py-2 px-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                      lessonFilter === key
+                        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                        : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                    }`}
+                  >
+                    {label} ({count})
+                  </button>
+                ))}
               </nav>
             </div>
 
             {/* Lessons List */}
             <div className="space-y-4 max-h-64 overflow-y-auto">
-              {studentLessons.length > 0 ? (
-                studentLessons.map((lesson) => (
-                  <LessonCard
-                    key={lesson.id}
-                    lesson={lesson}
-                    isAdmin
-                    onTogglePaid={handleTogglePaid}
-                    onCancel={openCancelModal}
-                    discountPercent={selectedStudent.discount_percent || 0}
-                  />
-                ))
-              ) : (
-                <p className="text-gray-500 dark:text-gray-400 text-center py-4">No lessons</p>
-              )}
+              {isLoadingDetails ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                </div>
+              ) : (() => {
+                // Filter lessons based on selected filter
+                const now = new Date();
+                const filteredLessons = studentLessons.filter(lesson => {
+                  const startTime = new Date(lesson.start_time);
+                  const isFuture = startTime > now;
+
+                  // Calculate if lesson is in progress
+                  const lessonType = getLessonType(lesson.lesson_type);
+                  const durationMinutes = lessonType?.duration ?? 60;
+                  const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+                  const isInProgress = startTime <= now && endTime > now && lesson.status === 'scheduled';
+
+                  switch (lessonFilter) {
+                    case 'upcoming':
+                      return isFuture && lesson.status === 'scheduled';
+                    case 'completed':
+                      // Include completed lessons, in-progress lessons, and past scheduled lessons
+                      const hasPassed = endTime <= now && lesson.status === 'scheduled';
+                      return lesson.status === 'completed' || isInProgress || hasPassed;
+                    case 'cancelled':
+                      return lesson.status === 'cancelled';
+                    case 'unpaid':
+                      return !lesson.is_paid && lesson.status === 'scheduled';
+                    case 'all':
+                    default:
+                      return true;
+                  }
+                });
+
+                return filteredLessons.length > 0 ? (
+                  filteredLessons.map((lesson) => (
+                    <LessonCard
+                      key={lesson.id}
+                      lesson={lesson}
+                      isAdmin
+                      onTogglePaid={handleTogglePaid}
+                      onCancel={openCancelModal}
+                      discountPercent={selectedStudent.discount_percent || 0}
+                    />
+                  ))
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400 text-center py-4">
+                    No {lessonFilter === 'all' ? '' : lessonFilter} lessons
+                  </p>
+                );
+              })()}
             </div>
 
             {/* Notes Section */}
@@ -576,6 +751,22 @@ export default function AdminStudentsPage() {
         isRecurring={lessonToCancel?.is_recurring || false}
         futureLessonsCount={getFutureLessonsCount()}
       />
+
+      {/* Send Reminder Modal */}
+      {reminderStudent && (
+        <SendReminderModal
+          isOpen={reminderModalOpen}
+          onClose={() => {
+            setReminderModalOpen(false);
+            setReminderStudent(null);
+          }}
+          studentName={reminderStudent.full_name || reminderStudent.email}
+          studentEmail={reminderStudent.email}
+          unpaidCount={students.find(s => s.student.id === reminderStudent.id)?.unpaidCount || 0}
+          studentId={reminderStudent.id}
+          onSuccess={handleReminderSuccess}
+        />
+      )}
     </div>
   );
 }

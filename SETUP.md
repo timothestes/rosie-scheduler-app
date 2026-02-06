@@ -153,21 +153,10 @@ This app uses Zoom's OAuth API to automatically create unique Zoom meetings for 
 
 ### 7. Database Migration
 
-Run this SQL in your Supabase SQL Editor to add the required tables/columns:
+Run this SQL in your Supabase SQL Editor to add the required columns:
 
 ```sql
--- Zoom tokens table
-CREATE TABLE IF NOT EXISTS zoom_tokens (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) NOT NULL UNIQUE,
-  access_token TEXT NOT NULL,
-  refresh_token TEXT NOT NULL,
-  expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Add Zoom columns to lessons table
+-- Add Zoom columns to lessons table (Zoom uses Server-to-Server OAuth, no token table needed)
 ALTER TABLE lessons ADD COLUMN IF NOT EXISTS zoom_meeting_id TEXT;
 ALTER TABLE lessons ADD COLUMN IF NOT EXISTS zoom_join_url TEXT;
 ```

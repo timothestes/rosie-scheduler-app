@@ -66,9 +66,73 @@ export default function UnpaidLessonsModal({ isOpen, onClose }: UnpaidLessonsMod
     }
   };
 
-  const handleSendReminders = () => {
-    // TODO: Implement email reminder functionality
-    alert(`Reminder emails will be sent for ${selectedLessons.size} lesson(s). (Feature coming soon)`);
+  const [isSendingReminders, setIsSendingReminders] = useState(false);
+  const [reminderError, setReminderError] = useState<string | null>(null);
+  const [reminderSuccess, setReminderSuccess] = useState(false);
+  const [showMessageEditor, setShowMessageEditor] = useState(false);
+  const [customMessage, setCustomMessage] = useState(
+    `Hi there,
+
+This is a friendly reminder that you have unpaid lessons. Please send your payment via Venmo, Zelle, or your preferred method.
+
+Thank you for your music lessons with me!
+
+- Rosie`
+  );
+
+  const handleSendReminders = async () => {
+    setIsSendingReminders(true);
+    setReminderError(null);
+    setReminderSuccess(false);
+
+    try {
+      // Group selected lessons by student
+      const lessonsByStudent = new Map<string, Set<string>>();
+
+      lessons.forEach(lesson => {
+        if (selectedLessons.has(lesson.id) && lesson.student) {
+          const studentId = lesson.student.id;
+          if (!lessonsByStudent.has(studentId)) {
+            lessonsByStudent.set(studentId, new Set());
+          }
+          lessonsByStudent.get(studentId)!.add(lesson.id);
+        }
+      });
+
+      // Send reminders for each student
+      const results = await Promise.allSettled(
+        Array.from(lessonsByStudent.keys()).map(studentId =>
+          fetch(`/api/students/${studentId}/send-reminder`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              customMessage: customMessage.trim(),
+            }),
+          })
+        )
+      );
+
+      const failedCount = results.filter(r => r.status === 'rejected').length;
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+
+      if (failedCount > 0) {
+        setReminderError(`Sent ${successCount} reminder(s), but ${failedCount} failed`);
+      } else {
+        setReminderSuccess(true);
+        setSelectedLessons(new Set()); // Clear selection
+
+        // Close modal after success
+        setTimeout(() => {
+          onClose();
+        }, 2000);
+      }
+    } catch (error) {
+      setReminderError('Failed to send reminders. Please try again.');
+    } finally {
+      setIsSendingReminders(false);
+    }
   };
 
   const totalAmount = lessons.reduce((sum, lesson) => {
@@ -90,23 +154,75 @@ export default function UnpaidLessonsModal({ isOpen, onClose }: UnpaidLessonsMod
         ) : (
           <>
             {/* Summary */}
-            <div className="flex items-center justify-between mb-4 pb-4 border-b dark:border-gray-700">
-              <div>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  {lessons.length} unpaid lesson{lessons.length !== 1 ? 's' : ''}
-                </span>
-                <span className="mx-2 text-gray-300 dark:text-gray-600">•</span>
-                <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">
-                  Total: {formatRate(totalAmount)}
-                </span>
+            <div className="mb-4 pb-4 border-b dark:border-gray-700">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {lessons.length} unpaid lesson{lessons.length !== 1 ? 's' : ''}
+                  </span>
+                  <span className="mx-2 text-gray-300 dark:text-gray-600">•</span>
+                  <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">
+                    Total: {formatRate(totalAmount)}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowMessageEditor(!showMessageEditor)}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    ✏️ {showMessageEditor ? 'Hide' : 'Edit'} Message
+                  </button>
+                  <button
+                    onClick={handleSendReminders}
+                    disabled={selectedLessons.size === 0 || isSendingReminders}
+                    className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  >
+                    {isSendingReminders ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        📧 Send ({selectedLessons.size})
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={handleSendReminders}
-                disabled={selectedLessons.size === 0}
-                className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Send Reminder{selectedLessons.size !== 1 ? 's' : ''} ({selectedLessons.size})
-              </button>
+
+              {showMessageEditor && (
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Personal Message (will be sent to all selected students)
+                  </label>
+                  <textarea
+                    value={customMessage}
+                    onChange={(e) => setCustomMessage(e.target.value)}
+                    rows={5}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                    placeholder="Enter your personal message..."
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    The email will also include each student's unpaid lessons list and total amount.
+                  </p>
+                </div>
+              )}
+
+              {reminderSuccess && (
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-sm text-green-800 dark:text-green-300">
+                  ✓ Reminders sent successfully!
+                </div>
+              )}
+
+              {reminderError && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-800 dark:text-red-300">
+                  {reminderError}
+                </div>
+              )}
             </div>
 
             {/* Table */}

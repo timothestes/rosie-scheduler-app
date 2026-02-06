@@ -92,17 +92,6 @@ CREATE TABLE IF NOT EXISTS google_tokens (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Zoom tokens table (for Zoom integration)
-CREATE TABLE IF NOT EXISTS zoom_tokens (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-  access_token TEXT NOT NULL,
-  refresh_token TEXT NOT NULL,
-  expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_lessons_student_id ON lessons(student_id);
 CREATE INDEX IF NOT EXISTS idx_lessons_admin_id ON lessons(admin_id);
@@ -259,11 +248,12 @@ CREATE POLICY "Admins can manage all lessons"
   );
 
 -- Google tokens policies
-CREATE POLICY "Users can manage their own tokens"
+CREATE POLICY "Users can manage their own google tokens"
   ON google_tokens FOR ALL
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Admins can view all tokens"
+CREATE POLICY "Admins can view all google tokens"
   ON google_tokens FOR SELECT
   USING (
     EXISTS (

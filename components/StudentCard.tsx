@@ -22,7 +22,10 @@ export default function StudentCard({
     (l) => new Date(l.start_time) > new Date() && l.status === 'scheduled'
   );
   const completedLessons = lessons.filter(
-    (l) => l.status === 'completed' || new Date(l.start_time) < new Date()
+    (l) => l.status === 'completed'
+  );
+  const cancelledLessons = lessons.filter(
+    (l) => l.status === 'cancelled'
   );
 
   const nextLesson = upcomingLessons[0];
@@ -66,14 +69,18 @@ export default function StudentCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+      <div className="grid grid-cols-3 gap-3 mb-4 text-sm">
         <div>
-          <p className="text-gray-500 dark:text-gray-400">Upcoming</p>
-          <p className="font-medium text-gray-900 dark:text-white">{upcomingLessons.length} lessons</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Upcoming</p>
+          <p className="font-medium text-gray-900 dark:text-white">{upcomingLessons.length}</p>
         </div>
         <div>
-          <p className="text-gray-500 dark:text-gray-400">Completed</p>
-          <p className="font-medium text-gray-900 dark:text-white">{completedLessons.length} lessons</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Completed</p>
+          <p className="font-medium text-gray-900 dark:text-white">{completedLessons.length}</p>
+        </div>
+        <div>
+          <p className="text-gray-500 dark:text-gray-400 text-xs">Cancelled</p>
+          <p className="font-medium text-gray-900 dark:text-white">{cancelledLessons.length}</p>
         </div>
       </div>
 

@@ -99,5 +99,6 @@ export function formatRate(rate: number): string {
   if (rate === 0) {
     return 'Free';
   }
-  return `$${rate}`;
+  // Format as whole number (discounts are rounded up to nearest dollar)
+  return `$${Math.round(rate)}`;
 }
