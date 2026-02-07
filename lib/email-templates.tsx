@@ -105,10 +105,17 @@ export function LessonReminderEmail({
           )}
 
           {locationType === 'in-person' && locationAddress && (
-            <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#E0E7FF', borderRadius: '6px' }}>
-              <p style={{ margin: 0, color: '#3730A3', fontSize: '14px' }}>
-                <strong>Address:</strong> {locationAddress}
-              </p>
+            <div style={{ marginTop: '16px' }}>
+              <div style={{ padding: '12px', backgroundColor: '#E0E7FF', borderRadius: '6px' }}>
+                <p style={{ margin: 0, color: '#3730A3', fontSize: '14px' }}>
+                  <strong>Address:</strong> {locationAddress}
+                </p>
+              </div>
+              <div style={{ marginTop: '8px', padding: '10px', backgroundColor: '#FFF3CD', borderRadius: '6px', borderLeft: '3px solid #FFC107' }}>
+                <p style={{ margin: 0, color: '#856404', fontSize: '13px' }}>
+                  <strong>Note:</strong> Additional fees may apply to accommodate driving costs.
+                </p>
+              </div>
             </div>
           )}
         </div>
@@ -170,6 +177,7 @@ export function getLessonReminderText({
   
   if (locationType === 'in-person' && locationAddress) {
     text += `Address: ${locationAddress}\n`;
+    text += `\nNote: Additional fees may apply to accommodate driving costs.\n`;
   }
   
   text += `\nView your schedule: ${appUrl}/lessons\n\n`;
