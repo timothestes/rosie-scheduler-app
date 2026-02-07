@@ -329,7 +329,7 @@ export async function POST(request: NextRequest) {
       ? `Booking Confirmed - ${createdLessons.length} Lessons Scheduled!`
       : 'Lesson Booked Successfully!';
 
-    // Format lesson details for email
+    // Format lesson details for email (Pacific Time)
     const lessonDetails = createdLessons.map(lesson => {
       const startTime = new Date(lesson.start_time);
       return {
@@ -337,12 +337,14 @@ export async function POST(request: NextRequest) {
           weekday: 'long',
           month: 'long',
           day: 'numeric',
-          year: 'numeric'
+          year: 'numeric',
+          timeZone: 'America/Los_Angeles'
         }),
         time: startTime.toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
-          hour12: true
+          hour12: true,
+          timeZone: 'America/Los_Angeles'
         }),
         type: lessonTypeInfo?.name || lesson.lesson_type,
         location: location_type === 'zoom' ? 'Zoom (link below)' : (location_address || 'In-Person'),

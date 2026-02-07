@@ -103,7 +103,8 @@ export async function POST(
         date: new Date(lesson.start_time).toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
-          year: 'numeric'
+          year: 'numeric',
+          timeZone: 'America/Los_Angeles'
         }),
         type: lessonType?.name || lesson.lesson_type,
         amount: formatRate(discountedRate),
