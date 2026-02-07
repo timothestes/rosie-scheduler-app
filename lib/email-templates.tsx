@@ -73,7 +73,7 @@ export function LessonReminderEmail({
               </tr>
               <tr>
                 <td style={{ padding: '8px 0', color: '#6B7280' }}>Time:</td>
-                <td style={{ padding: '8px 0', color: '#111827', fontWeight: 500 }}>{lessonTime}</td>
+                <td style={{ padding: '8px 0', color: '#111827', fontWeight: 500 }}>{lessonTime} <span style={{ color: '#6B7280', fontWeight: 400 }}>(Pacific Time)</span></td>
               </tr>
               <tr>
                 <td style={{ padding: '8px 0', color: '#6B7280' }}>Location:</td>
@@ -131,9 +131,11 @@ export function LessonReminderEmail({
           </a>
         </div>
 
-        <p style={{ fontSize: '14px', color: '#6B7280', margin: '0' }}>
-          Need to reschedule? Please let me know as soon as possible.
-        </p>
+        {hoursUntil === 24 && (
+          <p style={{ fontSize: '14px', color: '#6B7280', margin: '0' }}>
+            Need to reschedule? Please let me know as soon as possible.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -159,7 +161,7 @@ export function getLessonReminderText({
   text += `--------------\n`;
   text += `Type: ${lessonType}\n`;
   text += `Date: ${lessonDate}\n`;
-  text += `Time: ${lessonTime}\n`;
+  text += `Time: ${lessonTime} (Pacific Time)\n`;
   text += `Location: ${locationType === 'zoom' ? 'Zoom (Online)' : 'In-Person'}\n`;
   
   if (locationType === 'zoom' && zoomJoinUrl) {
@@ -171,7 +173,10 @@ export function getLessonReminderText({
   }
   
   text += `\nView your schedule: ${appUrl}/lessons\n\n`;
-  text += `Need to reschedule? Please let me know as soon as possible.`;
-  
+
+  if (hoursUntil === 24) {
+    text += `Need to reschedule? Please let me know as soon as possible.`;
+  }
+
   return text;
 }

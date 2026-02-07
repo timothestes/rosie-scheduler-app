@@ -23,22 +23,24 @@ function isAuthorized(request: NextRequest): boolean {
   return false;
 }
 
-// Format date for email
+// Format date for email (Pacific Time)
 function formatEmailDate(date: Date): string {
   return date.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    timeZone: 'America/Los_Angeles',
   });
 }
 
-// Format time for email
+// Format time for email (Pacific Time)
 function formatEmailTime(date: Date): string {
   return date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
+    timeZone: 'America/Los_Angeles',
   });
 }
 
