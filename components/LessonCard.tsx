@@ -83,7 +83,8 @@ export default function LessonCard({
   );
 
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-4 border border-transparent dark:border-gray-700 ${isCancelled ? 'opacity-60' : ''}`}>
+    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-4 border border-transparent dark:border-gray-700 flex flex-col h-full ${isCancelled ? 'opacity-60' : ''}`}>
+      <div className="flex-1">
       <div className="flex justify-between items-start mb-3">
         <div>
           <h3 className="font-semibold text-gray-900 dark:text-white">
@@ -280,40 +281,44 @@ export default function LessonCard({
           &ldquo;{lesson.notes}&rdquo;
         </p>
       )}
-
-      <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-        {lesson.location_type === 'zoom' && !isCancelled && !isPast && lesson.zoom_join_url && (
-          <a
-            href={lesson.zoom_join_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-          >
-            Join Zoom Meeting →
-          </a>
-        )}
-
-        {isAdmin && onEdit && !isCancelled && (
-          <button
-            onClick={() => onEdit(lesson.id)}
-            className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center gap-1"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            Edit
-          </button>
-        )}
-
-        {!isCancelled && !isPast && onCancel && (
-          <button
-            onClick={() => onCancel(lesson.id)}
-            className="text-sm text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 ml-auto"
-          >
-            Cancel Lesson
-          </button>
-        )}
       </div>
+
+      {(() => {
+        const showZoom = lesson.location_type === 'zoom' && !isCancelled && !isPast && !!lesson.zoom_join_url;
+        const showEdit = isAdmin && !!onEdit && !isCancelled;
+        const showCancel = !isCancelled && !isPast && !!onCancel;
+        if (!showZoom && !showEdit && !showCancel) return null;
+        return (
+          <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+            {showZoom && (
+              <a
+                href={lesson.zoom_join_url!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 text-center py-1.5 text-sm text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              >
+                Join Zoom
+              </a>
+            )}
+            {showEdit && (
+              <button
+                onClick={() => onEdit!(lesson.id)}
+                className="flex-1 py-1.5 text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Edit
+              </button>
+            )}
+            {showCancel && (
+              <button
+                onClick={() => onCancel!(lesson.id)}
+                className="flex-1 py-1.5 text-sm text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

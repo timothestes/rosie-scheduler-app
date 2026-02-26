@@ -58,6 +58,19 @@ export default function AdminStudentsPage() {
   // Edit lesson state
   const [lessonToEdit, setLessonToEdit] = useState<Lesson | null>(null);
 
+  // Auth email state
+  const [isSendingAuthEmail, setIsSendingAuthEmail] = useState<'setup' | 'reset' | null>(null);
+  const [authEmailResult, setAuthEmailResult] = useState<{ type: 'setup' | 'reset'; success: boolean; message: string } | null>(null);
+
+  // Delete student state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeletingStudent, setIsDeletingStudent] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Search and sort state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'alpha'>('newest');
+
   useEffect(() => {
     fetchStudents();
   }, []);
@@ -119,6 +132,9 @@ export default function AdminStudentsPage() {
     setIsEditingDiscount(false);
     setIsEditingAddress(false);
     setLessonFilter('all'); // Reset filter to 'all'
+    setAuthEmailResult(null);
+    setShowDeleteConfirm(false);
+    setDeleteError(null);
     // Clear previous student's data to prevent showing stale data
     setStudentLessons([]);
     setStudentNotes([]);
@@ -401,6 +417,56 @@ export default function AdminStudentsPage() {
     }
   };
 
+  const handleSendAuthEmail = async (type: 'setup' | 'reset') => {
+    if (!selectedStudent) return;
+    setIsSendingAuthEmail(type);
+    setAuthEmailResult(null);
+    try {
+      const res = await fetch(`/api/students/${selectedStudent.id}/send-auth-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAuthEmailResult({ type, success: true, message: `Sent to ${data.sentTo}` });
+      } else {
+        setAuthEmailResult({ type, success: false, message: data.error || 'Failed to send email' });
+      }
+    } catch {
+      setAuthEmailResult({ type, success: false, message: 'Failed to send email' });
+    } finally {
+      setIsSendingAuthEmail(null);
+    }
+  };
+
+  const handleDeleteStudent = async () => {
+    if (!selectedStudent) return;
+    setIsDeletingStudent(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/students/${selectedStudent.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDetails(false);
+        setSelectedStudent(null);
+        setShowDeleteConfirm(false);
+        await fetchStudents();
+      } else {
+        const data = await res.json();
+        setDeleteError(data.error || 'Failed to delete student');
+      }
+    } catch {
+      setDeleteError('Failed to delete student');
+    } finally {
+      setIsDeletingStudent(false);
+    }
+  };
+
+  const handleScheduleLessonFromCard = (student: User) => {
+    setSelectedStudent(student);
+    setShowScheduleLesson(true);
+  };
+
   const openEditLesson = (lessonId: string) => {
     const lesson = studentLessons.find(l => l.id === lessonId);
     if (lesson) setLessonToEdit(lesson);
@@ -410,6 +476,26 @@ export default function AdminStudentsPage() {
     setStudentLessons(prev => prev.map(l => l.id === updatedLesson.id ? updatedLesson : l));
     setLessonToEdit(null);
   };
+
+  const filteredStudents = students
+    .filter(({ student }) => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        student.full_name?.toLowerCase().includes(q) ||
+        student.email.toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => {
+      if (sortOrder === 'alpha') {
+        const nameA = a.student.full_name || a.student.email;
+        const nameB = b.student.full_name || b.student.email;
+        return nameA.localeCompare(nameB);
+      }
+      const dateA = new Date(a.student.created_at).getTime();
+      const dateB = new Date(b.student.created_at).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
 
   if (isLoading) {
     return (
@@ -421,7 +507,7 @@ export default function AdminStudentsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Students</h1>
         <button
           onClick={() => { setAddStudentError(null); setShowAddStudent(true); }}
@@ -434,6 +520,32 @@ export default function AdminStudentsPage() {
         </button>
       </div>
 
+      {/* Search and sort */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="flex items-center flex-1 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
+          <svg className="ml-3 w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-2.5 flex-shrink-0" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search by name or email…"
+            className="flex-1 py-2 pr-3 bg-transparent text-sm dark:text-white placeholder-gray-400 dark:placeholder-gray-500 outline-none"
+          />
+        </div>
+        <select
+          value={sortOrder}
+          onChange={e => setSortOrder(e.target.value as typeof sortOrder)}
+          className="w-full sm:w-auto px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="alpha">A → Z</option>
+        </select>
+      </div>
+
       {students.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-8 text-center border border-transparent dark:border-gray-700">
           <p className="text-gray-500 dark:text-gray-400">No students yet</p>
@@ -443,13 +555,18 @@ export default function AdminStudentsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {students.map(({ student, lessons, unpaidCount }) => (
+          {filteredStudents.length === 0 ? (
+            <div className="col-span-full text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
+              No students match your search.
+            </div>
+          ) : filteredStudents.map(({ student, lessons, unpaidCount }) => (
             <StudentCard
               key={student.id}
               student={student}
               lessons={lessons}
               unpaidCount={unpaidCount}
               onViewDetails={() => handleViewDetails(student)}
+              onScheduleLesson={() => handleScheduleLessonFromCard(student)}
               onSendReminder={unpaidCount > 0 ? () => handleSendReminder(student) : undefined}
             />
           ))}
@@ -498,6 +615,31 @@ export default function AdminStudentsPage() {
                   <p className="text-gray-500 dark:text-gray-400">{selectedStudent.phone}</p>
                 )}
               </div>
+            </div>
+
+            {/* Auth Email Actions */}
+            <div className="flex flex-wrap gap-2">
+              {selectedStudent.is_admin_created && (
+                <button
+                  onClick={() => handleSendAuthEmail('setup')}
+                  disabled={isSendingAuthEmail !== null}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-indigo-300 dark:border-indigo-600 text-indigo-700 dark:text-indigo-300 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-50 transition-colors"
+                >
+                  {isSendingAuthEmail === 'setup' ? 'Sending...' : '✉ Send Account Setup Email'}
+                </button>
+              )}
+              <button
+                onClick={() => handleSendAuthEmail('reset')}
+                disabled={isSendingAuthEmail !== null}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+              >
+                {isSendingAuthEmail === 'reset' ? 'Sending...' : '🔑 Send Password Reset'}
+              </button>
+              {authEmailResult && (
+                <span className={`self-center text-sm ${authEmailResult.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {authEmailResult.success ? `✓ ${authEmailResult.message}` : `✗ ${authEmailResult.message}`}
+                </span>
+              )}
             </div>
 
             {/* Discount Section */}
@@ -822,6 +964,46 @@ export default function AdminStudentsPage() {
                 )}
               </div>
             </div>
+
+            {/* Delete Student */}
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+              {!showDeleteConfirm ? (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="text-sm text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                >
+                  Delete student…
+                </button>
+              ) : (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 space-y-3">
+                  <p className="text-sm font-medium text-red-800 dark:text-red-300">
+                    Permanently delete {selectedStudent.full_name || selectedStudent.email}?
+                  </p>
+                  <p className="text-xs text-red-700 dark:text-red-400">
+                    This will delete all their lessons and notes. This cannot be undone.
+                  </p>
+                  {deleteError && (
+                    <p className="text-xs text-red-700 dark:text-red-400 font-medium">{deleteError}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleDeleteStudent}
+                      disabled={isDeletingStudent}
+                      className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
+                    >
+                      {isDeletingStudent ? 'Deleting…' : 'Yes, delete'}
+                    </button>
+                    <button
+                      onClick={() => { setShowDeleteConfirm(false); setDeleteError(null); }}
+                      disabled={isDeletingStudent}
+                      className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </Modal>
@@ -905,7 +1087,7 @@ export default function AdminStudentsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Discount %
+                Discount % <span className="text-xs font-normal text-gray-400 dark:text-gray-500">(can update later)</span>
               </label>
               <div className="flex items-center">
                 <input
@@ -979,7 +1161,8 @@ export default function AdminStudentsPage() {
           student={selectedStudent}
           onSuccess={() => {
             setShowScheduleLesson(false);
-            if (selectedStudent) fetchStudentDetails(selectedStudent.id);
+            fetchStudents();
+            if (showDetails && selectedStudent) fetchStudentDetails(selectedStudent.id);
           }}
         />
       )}

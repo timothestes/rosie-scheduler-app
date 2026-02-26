@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/students/[id]
@@ -120,4 +121,44 @@ export async function PATCH(
   }
 
   return NextResponse.json(student);
+}
+
+// DELETE /api/students/[id] - Permanently delete a student
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { data: admin } = await supabase
+    .from('admins')
+    .select('id')
+    .eq('email', user.email)
+    .single();
+
+  if (!admin) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+  }
+
+  const adminClient = createAdminClient();
+
+  // Delete related data first to avoid FK constraint issues
+  await adminClient.from('student_notes').delete().eq('student_id', id);
+  await adminClient.from('lessons').delete().eq('student_id', id);
+  await adminClient.from('users').delete().eq('id', id);
+
+  // Delete the auth user last
+  const { error: authError } = await adminClient.auth.admin.deleteUser(id);
+  if (authError) {
+    console.error('Error deleting auth user:', authError);
+    return NextResponse.json({ error: 'Failed to delete student' }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
 }

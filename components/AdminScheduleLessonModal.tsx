@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Modal from '@/components/Modal';
 import { lessonTypes, formatRate, getWeeklyMonthlyRate, getBiweeklyMonthlyRate } from '@/config/lessonTypes';
-import type { User, Availability, AvailabilityOverride } from '@/types';
+import type { User } from '@/types';
 
 interface AdminScheduleLessonModalProps {
   isOpen: boolean;
@@ -20,6 +20,24 @@ export default function AdminScheduleLessonModal({
 }: AdminScheduleLessonModalProps) {
   const today = new Date().toISOString().split('T')[0];
 
+  // Generate 30-min time slots from 6:00 AM to 9:30 PM
+  const timeSlots = (() => {
+    const slots: { value: string; label: string }[] = [];
+    for (let h = 6; h <= 21; h++) {
+      for (let m = 0; m < 60; m += 30) {
+        if (h === 21 && m === 30) break;
+        const hh = h.toString().padStart(2, '0');
+        const mm = m.toString().padStart(2, '0');
+        const value = `${hh}:${mm}`;
+        const label = new Date(`2000-01-01T${value}`).toLocaleTimeString('en-US', {
+          hour: 'numeric', minute: '2-digit', hour12: true,
+        });
+        slots.push({ value, label });
+      }
+    }
+    return slots;
+  })();
+
   const [date, setDate] = useState(today);
   const [time, setTime] = useState('10:00');
   const [lessonType, setLessonType] = useState('voice_thirty');
@@ -32,11 +50,6 @@ export default function AdminScheduleLessonModal({
   const [sendEmail, setSendEmail] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Availability for "outside window" warning
-  const [availability, setAvailability] = useState<Availability[]>([]);
-  const [overrides, setOverrides] = useState<AvailabilityOverride[]>([]);
-  const [outsideWindow, setOutsideWindow] = useState(false);
 
   // Reset form when student changes or modal opens
   useEffect(() => {
@@ -55,53 +68,7 @@ export default function AdminScheduleLessonModal({
     }
   }, [isOpen, student]);
 
-  // Fetch availability windows once
-  useEffect(() => {
-    if (!isOpen) return;
-    Promise.all([
-      fetch('/api/availability').then(r => r.json()),
-      fetch('/api/availability/overrides').then(r => r.json()),
-    ]).then(([avail, ovr]) => {
-      setAvailability(Array.isArray(avail) ? avail : []);
-      setOverrides(Array.isArray(ovr) ? ovr : []);
-    }).catch(() => {});
-  }, [isOpen]);
-
-  // Check if selected date+time falls outside normal availability
-  useEffect(() => {
-    if (!date || !time) { setOutsideWindow(false); return; }
-
-    const selectedDate = new Date(`${date}T${time}`);
-    const dayOfWeek = selectedDate.getDay();
-    const [hh, mm] = time.split(':').map(Number);
-    const minuteOfDay = hh * 60 + mm;
-
-    // Check for date override first
-    const override = overrides.find(o => o.override_date === date);
-    if (override) {
-      if (!override.is_available) { setOutsideWindow(true); return; }
-      if (override.start_time && override.end_time) {
-        const [oh, om] = override.start_time.split(':').map(Number);
-        const [eh, em] = override.end_time.split(':').map(Number);
-        const inWindow = minuteOfDay >= oh * 60 + om && minuteOfDay < eh * 60 + em;
-        setOutsideWindow(!inWindow);
-        return;
-      }
-    }
-
-    // Check regular availability
-    const dayWindows = availability.filter(a => a.day_of_week === dayOfWeek && a.is_recurring);
-    if (dayWindows.length === 0) { setOutsideWindow(true); return; }
-
-    const inAnyWindow = dayWindows.some(w => {
-      const [sh, sm] = w.start_time.split(':').map(Number);
-      const [eh, em] = w.end_time.split(':').map(Number);
-      return minuteOfDay >= sh * 60 + sm && minuteOfDay < eh * 60 + em;
-    });
-    setOutsideWindow(!inAnyWindow);
-  }, [date, time, availability, overrides]);
-
-  const selectedType = lessonTypes.find(t => t.id === lessonType);
+const selectedType = lessonTypes.find(t => t.id === lessonType);
 
   const getDisplayRate = () => {
     if (!selectedType) return '';
@@ -184,30 +151,20 @@ export default function AdminScheduleLessonModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Time
             </label>
-            <input
-              type="time"
+            <select
               value={time}
-              step={1800}
               onChange={e => setTime(e.target.value)}
               required
               className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
-            />
+            >
+              {timeSlots.map(slot => (
+                <option key={slot.value} value={slot.value}>{slot.label}</option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* Outside availability warning */}
-        {outsideWindow && (
-          <div className="flex items-start gap-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md px-3 py-2">
-            <svg className="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-xs text-yellow-700 dark:text-yellow-300">
-              This time is outside your normal availability. You can still proceed.
-            </p>
-          </div>
-        )}
-
-        {/* Lesson Type */}
+{/* Lesson Type */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Lesson Type
