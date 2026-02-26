@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import { getLessonType, getWeeklyMonthlyRate } from '@/config/lessonTypes';
+import { getLessonType, getWeeklyMonthlyRate, getBiweeklyMonthlyRate } from '@/config/lessonTypes';
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 
   const { data: lessons, error } = await supabase
     .from('lessons')
-    .select('id, lesson_type, start_time, is_recurring, recurring_series_id, paid_at, student_id, student:users!lessons_student_id_fkey(discount_percent)')
+    .select('id, lesson_type, start_time, is_recurring, recurring_series_id, recurring_frequency, paid_at, student_id, student:users!lessons_student_id_fkey(discount_percent)')
     .eq('is_paid', true)
     .neq('status', 'cancelled')
     .gte('paid_at', startDateTime.toISOString())
@@ -62,10 +62,11 @@ export async function GET(request: Request) {
   const byType: { [key: string]: { count: number; amount: number; name: string } } = {};
   
   // Track recurring lessons grouped by student + series + month
-  const recurringPayments = new Map<string, { 
-    lessons: typeof lessons, 
+  const recurringPayments = new Map<string, {
+    lessons: typeof lessons,
     lessonType: string,
-    discountPercent: number 
+    discountPercent: number,
+    recurringFrequency: string | null,
   }>();
 
   for (const lesson of lessons || []) {
@@ -88,10 +89,11 @@ export async function GET(request: Request) {
       const monthKey = `${lesson.student_id}-${lesson.recurring_series_id}-${lessonDate.getFullYear()}-${lessonDate.getMonth()}`;
       
       if (!recurringPayments.has(monthKey)) {
-        recurringPayments.set(monthKey, { 
-          lessons: [], 
+        recurringPayments.set(monthKey, {
+          lessons: [],
           lessonType: lesson.lesson_type,
-          discountPercent 
+          discountPercent,
+          recurringFrequency: (lesson as { recurring_frequency?: string | null }).recurring_frequency ?? null,
         });
       }
       recurringPayments.get(monthKey)!.lessons!.push(lesson);
@@ -109,8 +111,10 @@ export async function GET(request: Request) {
   }
   
   // Process recurring payments (one monthly payment per group)
-  recurringPayments.forEach(({ lessonType, discountPercent }) => {
-    const monthlyRate = getWeeklyMonthlyRate(lessonType);
+  recurringPayments.forEach(({ lessonType, discountPercent, recurringFrequency }) => {
+    const monthlyRate = recurringFrequency === 'biweekly'
+      ? getBiweeklyMonthlyRate(lessonType)
+      : getWeeklyMonthlyRate(lessonType);
     const discountAmount = monthlyRate * (discountPercent / 100);
     const rate = discountPercent > 0 ? Math.ceil(monthlyRate - discountAmount) : monthlyRate;
     
@@ -127,25 +131,28 @@ export async function GET(request: Request) {
   // Include student discount info
   const { data: activeRecurringLessons } = await supabase
     .from('lessons')
-    .select('student_id, lesson_type, student:users!lessons_student_id_fkey(discount_percent)')
+    .select('student_id, lesson_type, recurring_frequency, student:users!lessons_student_id_fkey(discount_percent)')
     .eq('is_recurring', true)
     .eq('status', 'scheduled')
     .gte('start_time', new Date().toISOString());
 
   // Calculate monthly recurring revenue (unique students × their monthly rate, with discounts applied)
-  const uniqueRecurringStudents = new Map<string, { lessonType: string; discountPercent: number }>(); // student_id -> { lessonType, discountPercent }
+  const uniqueRecurringStudents = new Map<string, { lessonType: string; discountPercent: number; recurringFrequency: string | null }>();
   for (const lesson of activeRecurringLessons || []) {
     if (!uniqueRecurringStudents.has(lesson.student_id)) {
       uniqueRecurringStudents.set(lesson.student_id, {
         lessonType: lesson.lesson_type,
         discountPercent: (lesson.student as { discount_percent?: number })?.discount_percent || 0,
+        recurringFrequency: (lesson as { recurring_frequency?: string | null }).recurring_frequency ?? null,
       });
     }
   }
 
   let monthlyRecurringRevenue = 0;
-  uniqueRecurringStudents.forEach(({ lessonType, discountPercent }) => {
-    const baseRate = getWeeklyMonthlyRate(lessonType);
+  uniqueRecurringStudents.forEach(({ lessonType, discountPercent, recurringFrequency }) => {
+    const baseRate = recurringFrequency === 'biweekly'
+      ? getBiweeklyMonthlyRate(lessonType)
+      : getWeeklyMonthlyRate(lessonType);
     // Round up to nearest dollar when discount is applied
     const discountedRate = discountPercent > 0 
       ? Math.ceil(baseRate * (1 - discountPercent / 100))

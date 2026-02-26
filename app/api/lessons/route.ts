@@ -102,12 +102,35 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { lesson_type, location_type, location_address, start_time, notes, is_recurring, recurring_frequency, recurring_months } = body;
+  const { lesson_type, location_type, location_address, start_time, notes, is_recurring, recurring_frequency, recurring_months, student_id: body_student_id, send_confirmation_email } = body;
 
   // Calculate end time based on lesson type duration
   const duration = getLessonDuration(lesson_type);
   const startDate = new Date(start_time);
   const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
+
+  // Check if caller is admin (needed for bypasses below)
+  const { data: callerAdmin } = await supabase
+    .from('admins')
+    .select('id')
+    .eq('email', user.email)
+    .single();
+
+  // Only enforce 24-hour advance booking for non-admin users
+  const minBookingTime = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  if (!callerAdmin && startDate < minBookingTime) {
+    return NextResponse.json(
+      { error: 'Lessons must be booked at least 24 hours in advance' },
+      { status: 400 }
+    );
+  }
+
+  // Determine which student this lesson is for
+  // Admin can book on behalf of any student by passing student_id; students book for themselves
+  const bookingStudentId = (callerAdmin && body_student_id) ? body_student_id : user.id;
+
+  // Admin can suppress confirmation email; students always receive it
+  const shouldSendEmail = callerAdmin ? (send_confirmation_email !== false) : true;
 
   // Get an admin to assign the lesson to
   // Use PRIMARY_ADMIN_EMAIL env var if set, otherwise fall back to first admin
@@ -147,6 +170,10 @@ export async function POST(request: NextRequest) {
       // Weekly lessons: 4 lessons per month
       const totalWeeks = recurring_months * 4;
       lessonDates = generateWeeklyRecurringDates(startDate, totalWeeks);
+    } else if (recurring_frequency === 'biweekly') {
+      // Bi-weekly lessons: 2 lessons per month (every 14 days)
+      const totalBiweekly = recurring_months * 2;
+      lessonDates = generateBiweeklyRecurringDates(startDate, totalBiweekly);
     } else {
       // Monthly lessons (legacy): 1 lesson per month
       lessonDates = generateMonthlyRecurringDates(startDate, recurring_months);
@@ -188,7 +215,7 @@ export async function POST(request: NextRequest) {
         .from('lessons')
         .select('id, location_type, student_id')
         .neq('status', 'cancelled')
-        .neq('student_id', user.id) // Exclude user's own lessons - they can book back-to-back
+        .neq('student_id', bookingStudentId) // Exclude this student's own lessons - they can book back-to-back
         .eq('location_type', 'in-person') // Only in-person lessons need buffer
         .lt('start_time', conflictEnd.toISOString())
         .gt('end_time', conflictStart.toISOString());
@@ -206,15 +233,15 @@ export async function POST(request: NextRequest) {
   const { data: studentInfo } = await supabase
     .from('users')
     .select('full_name, email, address')
-    .eq('id', user.id)
+    .eq('id', bookingStudentId)
     .single();
 
-  // If booking an in-person lesson with an address, save it to the user's profile
+  // If booking an in-person lesson with an address, save it to the student's profile
   if (location_type === 'in-person' && location_address && location_address.trim()) {
     await supabase
       .from('users')
       .update({ address: location_address.trim(), updated_at: new Date().toISOString() })
-      .eq('id', user.id);
+      .eq('id', bookingStudentId);
   }
 
   const lessonTypeInfo = getLessonType(lesson_type);
@@ -262,7 +289,7 @@ export async function POST(request: NextRequest) {
     let googleCalendarEventId: string | null = null;
 
     if (adminId) {
-      const recurringLabel = recurring_frequency === 'weekly' ? 'Weekly' : 'Monthly';
+      const recurringLabel = recurring_frequency === 'weekly' ? 'Weekly' : recurring_frequency === 'biweekly' ? 'Bi-Weekly' : 'Monthly';
       const eventTitle = is_recurring
         ? `${recurringLabel}: ${lessonTypeInfo?.name || 'Lesson'} with ${studentName}`
         : `${lessonTypeInfo?.name || 'Lesson'} with ${studentName}`;
@@ -288,7 +315,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from('lessons')
       .insert({
-        student_id: user.id,
+        student_id: bookingStudentId,
         admin_id: adminId,
         lesson_type,
         location_type,
@@ -303,6 +330,7 @@ export async function POST(request: NextRequest) {
         google_calendar_event_id: googleCalendarEventId,
         is_recurring: is_recurring || false,
         recurring_series_id: recurringSeriesId,
+        recurring_frequency: is_recurring ? (recurring_frequency ?? null) : null,
       })
       .select('*, student:users!lessons_student_id_fkey(*)')
       .single();
@@ -320,8 +348,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create lessons' }, { status: 500 });
   }
 
-  // Send booking confirmation email
-  try {
+  // Send booking confirmation email (suppressed if admin opted out)
+  if (shouldSendEmail) try {
     const studentName = studentInfo?.full_name?.split(' ')[0] || 'there';
     const isRecurringBooking = createdLessons.length > 1;
 
@@ -413,9 +441,12 @@ export async function POST(request: NextRequest) {
 
             <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e0e0e0;">
               <h3 style="font-size: 16px; margin-top: 0; color: #667eea;">Payment Information</h3>
-              ${isRecurringBooking && recurring_frequency === 'weekly' ? `
+              ${isRecurringBooking && (recurring_frequency === 'weekly' || recurring_frequency === 'biweekly') ? `
                 <p style="margin: 5px 0; font-size: 14px;">
-                  <strong>Monthly Rate:</strong> ${formatRate(lessonTypeInfo?.weeklyMonthlyRate ?? 0)}/month
+                  <strong>Frequency:</strong> ${recurring_frequency === 'biweekly' ? 'Bi-weekly (every 2 weeks)' : 'Weekly'}
+                </p>
+                <p style="margin: 5px 0; font-size: 14px;">
+                  <strong>Monthly Rate:</strong> ${formatRate(recurring_frequency === 'biweekly' ? (lessonTypeInfo?.biweeklyMonthlyRate ?? 0) : (lessonTypeInfo?.weeklyMonthlyRate ?? 0))}/month
                 </p>
                 <p style="margin: 5px 0; font-size: 14px;">
                   <strong>Duration:</strong> ${recurring_months} month${recurring_months > 1 ? 's' : ''}
@@ -472,8 +503,9 @@ ${lesson.zoomUrl ? `Zoom Link: ${lesson.zoomUrl}` : ''}
 
 ${notes ? `Your Notes: ${notes}\n` : ''}
 PAYMENT INFORMATION:
-${isRecurringBooking && recurring_frequency === 'weekly'
-  ? `Monthly Rate: ${formatRate(lessonTypeInfo?.weeklyMonthlyRate ?? 0)}/month
+${isRecurringBooking && (recurring_frequency === 'weekly' || recurring_frequency === 'biweekly')
+  ? `Frequency: ${recurring_frequency === 'biweekly' ? 'Bi-weekly (every 2 weeks)' : 'Weekly'}
+Monthly Rate: ${formatRate(recurring_frequency === 'biweekly' ? (lessonTypeInfo?.biweeklyMonthlyRate ?? 0) : (lessonTypeInfo?.weeklyMonthlyRate ?? 0))}/month
 Duration: ${recurring_months} month${recurring_months > 1 ? 's' : ''}
 Payment is due on the 1st of each month.`
   : `Price per lesson: ${formatRate(rate)}
@@ -533,6 +565,22 @@ function generateWeeklyRecurringDates(startDate: Date, weeks: number): Date[] {
   for (let i = 0; i < weeks; i++) {
     const date = new Date(startDate);
     date.setDate(startDate.getDate() + (i * 7));
+    date.setHours(hours, minutes, 0, 0);
+    dates.push(date);
+  }
+
+  return dates;
+}
+
+// Generate bi-weekly recurring lesson dates (every 14 days)
+function generateBiweeklyRecurringDates(startDate: Date, count: number): Date[] {
+  const dates: Date[] = [];
+  const hours = startDate.getHours();
+  const minutes = startDate.getMinutes();
+
+  for (let i = 0; i < count; i++) {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + (i * 14));
     date.setHours(hours, minutes, 0, 0);
     dates.push(date);
   }

@@ -86,7 +86,7 @@ export async function PATCH(
 
   // Students can only update certain fields
   const allowedFields = isAdmin
-    ? ['status', 'is_paid', 'notes', 'location_type', 'cancelled_at', 'cancellation_reason']
+    ? ['status', 'is_paid', 'notes', 'location_type', 'location_address', 'cancelled_at', 'cancellation_reason']
     : ['status', 'notes', 'cancelled_at', 'cancellation_reason'];
 
   const updates: Record<string, any> = {};

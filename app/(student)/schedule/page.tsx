@@ -158,12 +158,11 @@ export default function SchedulePage() {
         const minutes = time % 60;
         const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
         
-        // Skip past times for today
-        if (isToday) {
-          const slotTime = parseTimeToDate(timeStr, date);
-          if (slotTime <= today) {
-            continue;
-          }
+        // Skip slots within 24 hours from now
+        const slotTime = parseTimeToDate(timeStr, date);
+        const minBookingTime = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+        if (slotTime <= minBookingTime) {
+          continue;
         }
 
         // End time is tentatively 30 minutes after start (minimum slot)

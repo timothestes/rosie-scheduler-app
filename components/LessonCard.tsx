@@ -10,6 +10,7 @@ interface LessonCardProps {
   isAdmin?: boolean;
   onCancel?: (lessonId: string) => void;
   onTogglePaid?: (lessonId: string, isPaid: boolean) => void;
+  onEdit?: (lessonId: string) => void;
   showStudent?: boolean;
   discountPercent?: number; // Student's discount percentage (0-100)
 }
@@ -19,6 +20,7 @@ export default function LessonCard({
   isAdmin = false,
   onCancel,
   onTogglePaid,
+  onEdit,
   showStudent = false,
   discountPercent = 0,
 }: LessonCardProps) {
@@ -28,12 +30,30 @@ export default function LessonCard({
   const isPast = startTime < new Date();
   const isCancelled = lesson.status === 'cancelled';
   const [addressCopied, setAddressCopied] = useState(false);
-  
+  const [emailCopied, setEmailCopied] = useState(false);
+  const [phoneCopied, setPhoneCopied] = useState(false);
+
   const copyAddress = async () => {
     if (lesson.location_address) {
       await navigator.clipboard.writeText(lesson.location_address);
       setAddressCopied(true);
       setTimeout(() => setAddressCopied(false), 2000);
+    }
+  };
+
+  const copyEmail = async () => {
+    if (lesson.student?.email) {
+      await navigator.clipboard.writeText(lesson.student.email);
+      setEmailCopied(true);
+      setTimeout(() => setEmailCopied(false), 2000);
+    }
+  };
+
+  const copyPhone = async () => {
+    if (lesson.student?.phone) {
+      await navigator.clipboard.writeText(lesson.student.phone);
+      setPhoneCopied(true);
+      setTimeout(() => setPhoneCopied(false), 2000);
     }
   };
   
@@ -87,10 +107,58 @@ export default function LessonCard({
       </div>
 
       {showStudent && lesson.student && (
-        <div className="mb-3">
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            <span className="font-medium">Student:</span> {lesson.student.full_name || lesson.student.email}
+        <div className="mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-1.5">
+          <p className="text-sm font-semibold text-gray-900 dark:text-white">
+            {lesson.student.full_name || lesson.student.email}
           </p>
+          <div className="flex items-center justify-between gap-2">
+            <a
+              href={`mailto:${lesson.student.email}`}
+              className="text-sm text-blue-600 dark:text-blue-400 hover:underline truncate"
+            >
+              {lesson.student.email}
+            </a>
+            <button
+              onClick={copyEmail}
+              className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors flex-shrink-0"
+              title="Copy email"
+            >
+              {emailCopied ? (
+                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              )}
+            </button>
+          </div>
+          {lesson.student.phone && (
+            <div className="flex items-center justify-between gap-2">
+              <a
+                href={`tel:${lesson.student.phone}`}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                {lesson.student.phone}
+              </a>
+              <button
+                onClick={copyPhone}
+                className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors flex-shrink-0"
+                title="Copy phone"
+              >
+                {phoneCopied ? (
+                  <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -223,6 +291,18 @@ export default function LessonCard({
           >
             Join Zoom Meeting →
           </a>
+        )}
+
+        {isAdmin && onEdit && !isCancelled && (
+          <button
+            onClick={() => onEdit(lesson.id)}
+            className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center gap-1"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Edit
+          </button>
         )}
 
         {!isCancelled && !isPast && onCancel && (
