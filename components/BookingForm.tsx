@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { lessonTypes, getLessonType, formatDuration, formatRate, getWeeklySavings } from '@/config/lessonTypes';
+import { lessonTypes, getLessonType, LessonType, formatDuration, formatRate, getWeeklySavings, getBiweeklySavings } from '@/config/lessonTypes';
 import { cancellationPolicy } from '@/config/cancellationPolicy';
 
 interface BookingFormProps {
@@ -22,8 +22,8 @@ export interface BookingData {
   location_address?: string; // Student address for in-person lessons
   notes: string;
   is_recurring: boolean;
-  recurring_frequency?: 'weekly';
-  recurring_months?: number; // For weekly: how many months to book
+  recurring_frequency?: 'weekly' | 'biweekly';
+  recurring_months?: number; // For weekly/biweekly: how many months to book
 }
 
 export default function BookingForm({
@@ -52,6 +52,7 @@ export default function BookingForm({
   const [agreedToPolicy, setAgreedToPolicy] = useState(false);
   const [policyNeedsAttention, setPolicyNeedsAttention] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringFrequency, setRecurringFrequency] = useState<'weekly' | 'biweekly'>('weekly');
   const [recurringMonths, setRecurringMonths] = useState(1);
 
   const selectedLessonType = getLessonType(lessonType);
@@ -85,7 +86,7 @@ export default function BookingForm({
       location_address: locationType === 'in-person' ? locationAddress : undefined,
       notes,
       is_recurring: isRecurring && !isTrialLesson,
-      recurring_frequency: isRecurring && !isTrialLesson ? 'weekly' : undefined,
+      recurring_frequency: isRecurring && !isTrialLesson ? recurringFrequency : undefined,
       recurring_months: isRecurring && !isTrialLesson ? recurringMonths : undefined,
     });
   };
@@ -121,9 +122,15 @@ export default function BookingForm({
     });
   };
 
-  // Calculate total lessons for weekly recurring
-  const totalWeeklyLessons = recurringMonths * 4;
-  
+  // Calculate total lessons for the selected recurring frequency
+  const totalLessons = recurringMonths * (recurringFrequency === 'weekly' ? 4 : 2);
+
+  // Get the monthly rate for the currently selected frequency
+  const getActiveMonthlyRate = (type: LessonType) => {
+    if (recurringFrequency === 'biweekly') return type.biweeklyMonthlyRate ?? type.rate;
+    return type.weeklyMonthlyRate;
+  };
+
   // Apply discount to a rate (rounds up to nearest dollar)
   const applyDiscount = (rate: number) => {
     if (discountPercent <= 0) return rate;
@@ -134,21 +141,23 @@ export default function BookingForm({
   const getTotalPrice = () => {
     if (!selectedLessonType) return 0;
     if (isRecurring && !isTrialLesson) {
-      return applyDiscount(selectedLessonType.weeklyMonthlyRate * recurringMonths);
+      return applyDiscount(getActiveMonthlyRate(selectedLessonType) * recurringMonths);
     }
     return applyDiscount(selectedLessonType.rate);
   };
-  
+
   // Get original price (without discount) for comparison
   const getOriginalPrice = () => {
     if (!selectedLessonType) return 0;
     if (isRecurring && !isTrialLesson) {
-      return selectedLessonType.weeklyMonthlyRate * recurringMonths;
+      return getActiveMonthlyRate(selectedLessonType) * recurringMonths;
     }
     return selectedLessonType.rate;
   };
 
-  const monthlySavings = selectedLessonType ? getWeeklySavings(selectedLessonType.id) : 0;
+  const monthlySavings = selectedLessonType
+    ? (recurringFrequency === 'biweekly' ? getBiweeklySavings(selectedLessonType.id) : getWeeklySavings(selectedLessonType.id))
+    : 0;
   const hasDiscount = discountPercent > 0;
 
   return (
@@ -208,17 +217,17 @@ export default function BookingForm({
                   {hasDiscount ? (
                     <div>
                       <p className="text-sm text-gray-400 dark:text-gray-500 line-through whitespace-nowrap">
-                        {showRecurringPrice ? `${formatRate(type.weeklyMonthlyRate)}/mo` : formatRate(type.rate)}
+                        {showRecurringPrice ? `${formatRate(getActiveMonthlyRate(type))}/mo` : formatRate(type.rate)}
                       </p>
                       <p className="font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
-                        {showRecurringPrice 
-                          ? `${formatRate(applyDiscount(type.weeklyMonthlyRate))}/mo` 
+                        {showRecurringPrice
+                          ? `${formatRate(applyDiscount(getActiveMonthlyRate(type)))}/mo`
                           : formatRate(applyDiscount(type.rate))}
                       </p>
                     </div>
                   ) : (
                     <p className="font-medium text-gray-900 dark:text-white whitespace-nowrap">
-                      {showRecurringPrice ? `${formatRate(type.weeklyMonthlyRate)}/mo` : formatRate(type.rate)}
+                      {showRecurringPrice ? `${formatRate(getActiveMonthlyRate(type))}/mo` : formatRate(type.rate)}
                     </p>
                   )}
                   <p className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDuration(type.duration)}</p>
@@ -229,25 +238,25 @@ export default function BookingForm({
         </div>
       </div>
 
-      {/* Weekly Plan Toggle - Only show for non-trial lessons */}
+      {/* Recurring Lessons Plan - Only show for non-trial lessons */}
       {!isTrialLesson && (
         <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-4 border border-green-200 dark:border-green-800">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <p className="font-medium text-gray-900 dark:text-white">Weekly Lessons (Monthly Plan)</p>
-                {!isRecurring && monthlySavings > 0 && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-600 text-white">
-                    Save ~${monthlySavings}/month
-                  </span>
-                )}
-              </div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-gray-900 dark:text-white">Recurring Lessons (Monthly Plan)</p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                {isRecurring 
-                  ? `Every ${getDayName()} at ${getTimeOnly()}`
-                  : 'Best value! Weekly lessons billed monthly'
+                {isRecurring
+                  ? recurringFrequency === 'biweekly'
+                    ? `Every other ${getDayName()} at ${getTimeOnly()}`
+                    : `Every ${getDayName()} at ${getTimeOnly()}`
+                  : 'Best value! Recurring lessons billed monthly'
                 }
               </p>
+              {!isRecurring && monthlySavings > 0 && (
+                <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-600 text-white">
+                  Save ~${monthlySavings}/month
+                </span>
+              )}
             </div>
             <button
               type="button"
@@ -263,31 +272,54 @@ export default function BookingForm({
               />
             </button>
           </div>
-          
+
           {isRecurring && (
-            <div className="mt-4 pt-4 border-t border-green-200 dark:border-green-700">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                How long would you like to commit?
-              </label>
-              <div className="flex space-x-2">
-                {[1, 3, 6].map((months) => (
-                  <button
-                    key={months}
-                    type="button"
-                    onClick={() => setRecurringMonths(months)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      recurringMonths === months
-                        ? 'bg-green-600 text-white'
-                        : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    {months} {months === 1 ? 'month' : 'months'}
-                  </button>
-                ))}
+            <div className="mt-4 pt-4 border-t border-green-200 dark:border-green-700 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Frequency
+                </label>
+                <div className="flex space-x-2">
+                  {(['biweekly', 'weekly'] as const).map((freq) => (
+                    <button
+                      key={freq}
+                      type="button"
+                      onClick={() => setRecurringFrequency(freq)}
+                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        recurringFrequency === freq
+                          ? 'bg-green-600 text-white'
+                          : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      {freq === 'biweekly' ? 'Bi-weekly' : 'Weekly'}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                {totalWeeklyLessons} lessons total • Billed {formatRate(selectedLessonType?.weeklyMonthlyRate ?? 0)}/month
-              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  How long would you like to commit?
+                </label>
+                <div className="flex space-x-2">
+                  {[1, 3, 6].map((months) => (
+                    <button
+                      key={months}
+                      type="button"
+                      onClick={() => setRecurringMonths(months)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        recurringMonths === months
+                          ? 'bg-green-600 text-white'
+                          : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      {months} {months === 1 ? 'month' : 'months'}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  {totalLessons} lessons total • Billed {formatRate(selectedLessonType ? getActiveMonthlyRate(selectedLessonType) : 0)}/month
+                </p>
+              </div>
             </div>
           )}
         </div>
@@ -433,14 +465,14 @@ export default function BookingForm({
                 <span className="text-green-600 dark:text-green-400">
                   {hasDiscount && (
                     <span className="text-base text-gray-400 dark:text-gray-500 line-through mr-2">
-                      {formatRate(selectedLessonType.weeklyMonthlyRate)}
+                      {formatRate(getActiveMonthlyRate(selectedLessonType))}
                     </span>
                   )}
-                  {formatRate(applyDiscount(selectedLessonType.weeklyMonthlyRate))}
+                  {formatRate(applyDiscount(getActiveMonthlyRate(selectedLessonType)))}
                 </span>
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {totalWeeklyLessons} weekly lessons over {recurringMonths} {recurringMonths === 1 ? 'month' : 'months'}
+                {totalLessons} {recurringFrequency === 'biweekly' ? 'bi-weekly' : 'weekly'} lessons over {recurringMonths} {recurringMonths === 1 ? 'month' : 'months'}
               </p>
               {monthlySavings > 0 && (
                 <p className="text-sm text-green-600 dark:text-green-400 mt-2 font-medium">
@@ -497,7 +529,7 @@ export default function BookingForm({
               !agreedToPolicy && !isLoading ? 'pointer-events-none' : ''
             }`}
           >
-            {isLoading ? 'Booking...' : isRecurring ? `Book ${totalWeeklyLessons} Lessons` : 'Book Lesson'}
+            {isLoading ? 'Booking...' : isRecurring ? `Book ${totalLessons} Lessons` : 'Book Lesson'}
           </button>
         </div>
       </div>

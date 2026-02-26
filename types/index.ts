@@ -8,6 +8,7 @@ export interface User {
   address: string | null; // Student address for in-person lessons
   discount_percent: number; // 0-100 percentage discount on lesson fees
   is_returning_student: boolean | null; // null = not yet asked, true = returning student (no first lesson discount), false = new student
+  is_admin_created?: boolean; // true = created by admin without login
   created_at: string;
   updated_at: string;
 }

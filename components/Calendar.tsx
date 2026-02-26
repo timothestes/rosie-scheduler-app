@@ -141,69 +141,84 @@ export default function Calendar({
               onClick={() => onDateSelect(day)}
               className={`
                 min-h-[70px] sm:min-h-[100px] p-0.5 sm:p-2 border-b border-r dark:border-gray-700 text-left
-                transition-colors hover:bg-gray-50 dark:hover:bg-gray-700
+                overflow-hidden transition-colors hover:bg-gray-50 dark:hover:bg-gray-700
                 ${!inCurrentMonth ? 'bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-600' : 'dark:text-gray-200'}
                 ${isSelected && !blockOutMode ? 'bg-indigo-50 dark:bg-indigo-900/30 ring-2 ring-indigo-500 ring-inset' : ''}
                 ${blockOutMode && inCurrentMonth ? 'cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20' : ''}
                 ${isBlockOutSelected ? 'bg-red-100 dark:bg-red-900/40 ring-2 ring-red-500 ring-inset' : ''}
               `}
             >
-              <div className="flex flex-col h-full items-center sm:items-start">
+              <div className="flex flex-col h-full w-full items-center sm:items-start">
                 <span
                   className={`
-                    inline-flex items-center justify-center w-5 h-5 sm:w-7 sm:h-7 text-xs sm:text-sm rounded-full
+                    inline-flex items-center justify-center w-5 h-5 sm:w-7 sm:h-7 text-xs sm:text-sm rounded-full flex-shrink-0
                     ${isTodayDate ? 'bg-indigo-600 text-white font-semibold' : ''}
                     ${isSelected && !isTodayDate ? 'bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-200' : ''}
                   `}
                 >
                   {day.getDate()}
                 </span>
-                
-                <div className="mt-1 space-y-1 overflow-hidden">
+
+                <div className="mt-1 w-full space-y-0.5 min-w-0">
                   {/* Availability indicator */}
                   {hasAvailability && (
                     <div className={`h-1.5 w-1.5 rounded-full bg-green-500 ${!inCurrentMonth ? 'opacity-50' : ''}`} title="Available" />
                   )}
-                  
+
                   {/* Blocked out indicator */}
                   {hasBlockedOverride && (
                     <div className={`h-1.5 w-1.5 rounded-full bg-red-500 ${!inCurrentMonth ? 'opacity-50' : ''}`} title="Blocked Out" />
                   )}
-                  
-                  {/* Lessons */}
+
+                  {/* Lessons — show time only, full details on hover */}
                   {dayLessons.slice(0, 2).map((lesson) => (
                     <div
                       key={lesson.id}
-                      className={`text-xs truncate px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 ${!inCurrentMonth ? 'opacity-50' : ''}`}
-                      title={`${lesson.lesson_type} - ${lesson.student?.full_name || 'Student'}`}
+                      className={`hidden sm:block text-xs w-full truncate px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 ${!inCurrentMonth ? 'opacity-50' : ''}`}
+                      title={`${lesson.student?.full_name || 'Student'} · ${lesson.lesson_type}`}
                     >
-                      <span className="hidden sm:inline">
-                        {new Date(lesson.start_time).toLocaleTimeString('en-US', { 
-                          hour: 'numeric', 
-                          minute: '2-digit',
-                          hour12: true 
-                        })}
-                      </span>
+                      {new Date(lesson.start_time).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true,
+                      })}
                     </div>
                   ))}
-                  
-                  {/* Google Calendar events */}
+                  {/* Dot indicator on mobile where text chips are hidden */}
+                  {dayLessons.length > 0 && (
+                    <div className="sm:hidden flex gap-0.5 flex-wrap">
+                      {dayLessons.slice(0, 3).map((lesson) => (
+                        <div key={lesson.id} className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Google Calendar events — time only, full title on hover */}
                   {dayGoogleEvents.slice(0, 1).map((event) => (
                     <div
                       key={event.id}
-                      className={`text-xs truncate px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 ${!inCurrentMonth ? 'opacity-50' : ''}`}
+                      className={`hidden sm:block text-xs w-full truncate px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 ${!inCurrentMonth ? 'opacity-50' : ''}`}
                       title={event.summary}
                     >
-                      <span className="hidden sm:inline">{event.summary}</span>
+                      {event.start.dateTime
+                        ? new Date(event.start.dateTime).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          })
+                        : '·'}
                     </div>
                   ))}
-                  
-                  {/* More indicator */}
-                  {(dayLessons.length > 2 || dayGoogleEvents.length > 1) && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      +{dayLessons.length + dayGoogleEvents.length - 3} more
-                    </div>
-                  )}
+
+                  {/* Overflow count */}
+                  {(() => {
+                    const overflow = Math.max(0, dayLessons.length - 2) + Math.max(0, dayGoogleEvents.length - 1);
+                    return overflow > 0 ? (
+                      <div className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 leading-tight">
+                        +{overflow} more
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               </div>
             </button>

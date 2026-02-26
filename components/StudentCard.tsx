@@ -8,6 +8,7 @@ interface StudentCardProps {
   lessons: Lesson[];
   unpaidCount: number;
   onViewDetails: () => void;
+  onScheduleLesson?: () => void;
   onSendReminder?: () => void;
 }
 
@@ -16,6 +17,7 @@ export default function StudentCard({
   lessons,
   unpaidCount,
   onViewDetails,
+  onScheduleLesson,
   onSendReminder,
 }: StudentCardProps) {
   const upcomingLessons = lessons.filter(
@@ -84,31 +86,43 @@ export default function StudentCard({
         </div>
       </div>
 
-      {nextLesson && (
-        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Next Lesson</p>
-          <p className="text-sm font-medium text-gray-900 dark:text-white">
-            {formatDate(new Date(nextLesson.start_time), 'short')}
-          </p>
-          <p className="text-xs text-gray-600 dark:text-gray-300">
-            {new Date(nextLesson.start_time).toLocaleTimeString('en-US', {
-              hour: 'numeric',
-              minute: '2-digit',
-              hour12: true,
-            })}
-            {' - '}
-            {nextLesson.location_type === 'zoom' ? '📹 Zoom' : '📍 In-Person'}
-          </p>
-        </div>
-      )}
+      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Next Lesson</p>
+        {nextLesson ? (
+          <>
+            <p className="text-sm font-medium text-gray-900 dark:text-white">
+              {formatDate(new Date(nextLesson.start_time), 'short')}
+            </p>
+            <p className="text-xs text-gray-600 dark:text-gray-300">
+              {new Date(nextLesson.start_time).toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              })}
+              {' - '}
+              {nextLesson.location_type === 'zoom' ? '📹 Zoom' : '📍 In-Person'}
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-gray-400 dark:text-gray-500 italic">No next lesson scheduled</p>
+        )}
+      </div>
 
-      <div className="flex space-x-2">
+      <div className="flex gap-2">
         <button
           onClick={onViewDetails}
           className="flex-1 px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
         >
           View Details
         </button>
+        {onScheduleLesson && (
+          <button
+            onClick={onScheduleLesson}
+            className="flex-1 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            + Lesson
+          </button>
+        )}
         {unpaidCount > 0 && onSendReminder && (
           <button
             onClick={onSendReminder}

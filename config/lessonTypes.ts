@@ -5,6 +5,7 @@ export interface LessonType {
   duration: number; // in minutes
   rate: number; // individual lesson price (billed on day of lesson)
   weeklyMonthlyRate: number; // total monthly cost for weekly lessons (billed monthly)
+  biweeklyMonthlyRate?: number; // total monthly cost for bi-weekly lessons (billed monthly)
   color: string; // for UI display
   isTrialLesson?: boolean; // trial lessons can't be recurring
 }
@@ -37,6 +38,7 @@ export const lessonTypes: LessonType[] = [
     duration: 30,
     rate: 40,
     weeklyMonthlyRate: 145, // ~$15 savings vs 4x$40=$160
+    biweeklyMonthlyRate: 70, // ~$10 savings vs 2x$40=$80
     color: '#3B82F6', // blue
   },
   {
@@ -46,6 +48,7 @@ export const lessonTypes: LessonType[] = [
     duration: 60,
     rate: 80,
     weeklyMonthlyRate: 305, // ~$15 savings vs 4x$80=$320
+    biweeklyMonthlyRate: 145, // ~$15 savings vs 2x$80=$160
     color: '#8B5CF6', // purple
   },
 ];
@@ -81,6 +84,25 @@ export function getWeeklySavings(id: string): number {
   const type = getLessonType(id);
   if (!type || type.isTrialLesson) return 0;
   return (type.rate * 4) - type.weeklyMonthlyRate;
+}
+
+export function getBiweeklyMonthlyRate(id: string): number {
+  const type = getLessonType(id);
+  return type?.biweeklyMonthlyRate ?? type?.rate ?? 0;
+}
+
+// Calculate per-lesson price when on bi-weekly plan (2 lessons/month)
+export function getBiweeklyPerLessonRate(id: string): number {
+  const type = getLessonType(id);
+  if (!type?.biweeklyMonthlyRate) return type?.rate ?? 0;
+  return type.biweeklyMonthlyRate / 2;
+}
+
+// Calculate savings per month on bi-weekly plan
+export function getBiweeklySavings(id: string): number {
+  const type = getLessonType(id);
+  if (!type || type.isTrialLesson || !type.biweeklyMonthlyRate) return 0;
+  return (type.rate * 2) - type.biweeklyMonthlyRate;
 }
 
 export function formatDuration(minutes: number): string {
