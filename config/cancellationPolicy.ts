@@ -10,9 +10,9 @@ export const cancellationPolicy: CancellationPolicy = {
   lateCancellationFee: 10,
   allowStudentCancellation: true,
   terms: [
-    'Cancellations or rescheduling require at least 24 hours\' notice.',
-    '1 reschedule per month included.',
-    'Lessons cancelled with less than 24 hours\' notice will incur a $10 fee added to your next lesson.',
+    'Cancellations or reschedulings require at least 24 hours notice.',
+    '1 reschedule per month will be accommodated. Further, reschedules may be requested, but not guaranteed.',
+    'Lessons cancelled with less than 24 hours notice will incur a $10 fee added to the next lesson.',
   ],
 };
 

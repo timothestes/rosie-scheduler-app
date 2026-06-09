@@ -301,7 +301,7 @@ export default function BookingForm({
                   How long would you like to commit?
                 </label>
                 <div className="flex space-x-2">
-                  {[1, 3, 6].map((months) => (
+                  {[1, 3].map((months) => (
                     <button
                       key={months}
                       type="button"
