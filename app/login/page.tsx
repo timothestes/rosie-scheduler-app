@@ -1,5 +1,6 @@
-import { signInWithGoogle, signInWithEmail, signUpWithEmail } from "./actions"
+import { signInWithGoogle } from "./actions"
 import DarkModeToggle from "@/components/DarkModeToggle"
+import EmailAuthForm from "@/components/EmailAuthForm"
 
 export default async function Login({ searchParams }: { searchParams: Promise<{ message: string }> }) {
   const params = await searchParams
@@ -21,11 +22,14 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
 
         {/* Login Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg dark:shadow-gray-900/50 p-8 border border-transparent dark:border-gray-700">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white text-center mb-6">
-            Sign in to continue
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white text-center mb-2">
+            Welcome!
           </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 text-center mb-6">
+            New students: create an account or just continue with Google.
+          </p>
 
-          {/* Google Sign In */}
+          {/* Google — easiest path, works for new and returning users */}
           <form>
             <button
               formAction={signInWithGoogle}
@@ -37,7 +41,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
-              <span className="font-medium">Sign in with Google</span>
+              <span className="font-medium">Continue with Google</span>
             </button>
           </form>
 
@@ -47,54 +51,12 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
               <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">or continue with email</span>
+              <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">or use email</span>
             </div>
           </div>
 
-          {/* Email/Password Form */}
-          <form className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="you@example.com"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                minLength={6}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="••••••••"
-              />
-            </div>
-            <div className="flex gap-3">
-              <button
-                formAction={signInWithEmail}
-                className="flex-1 bg-indigo-600 text-white rounded-lg px-4 py-2.5 font-medium hover:bg-indigo-700 transition-colors"
-              >
-                Sign In
-              </button>
-              <button
-                formAction={signUpWithEmail}
-                className="flex-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors border border-gray-300 dark:border-gray-600"
-              >
-                Sign Up
-              </button>
-            </div>
-          </form>
+          {/* Email/Password — with explicit Sign In / Create Account toggle */}
+          <EmailAuthForm />
 
           {params?.message && (
             <div className={`mt-4 p-4 rounded-lg border ${
