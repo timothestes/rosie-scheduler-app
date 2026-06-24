@@ -4,8 +4,9 @@ import { getLessonDuration, getLessonType, formatRate } from '@/config/lessonTyp
 import { createZoomMeeting, getZoomAccessToken } from '@/lib/zoom';
 import { createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { getPrimaryAdminEmail } from '@/lib/utils';
-import { commuteConfig } from '@/config/commute';
 import { resend, EMAIL_CONFIG } from '@/lib/resend';
+import { generateRecurringDates } from '@/lib/recurring-dates';
+import { checkOccurrenceConflicts } from '@/lib/conflicts';
 
 // GET /api/lessons - Get lessons
 export async function GET(request: NextRequest) {
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { lesson_type, location_type, location_address, start_time, notes, is_recurring, recurring_frequency, recurring_months, student_id: body_student_id, send_confirmation_email } = body;
+  const { lesson_type, location_type, location_address, start_time, notes, is_recurring, recurring_frequency, recurring_months, skip_dates, student_id: body_student_id, send_confirmation_email } = body;
 
   // Calculate end time based on lesson type duration
   const duration = getLessonDuration(lesson_type);
@@ -164,69 +165,45 @@ export async function POST(request: NextRequest) {
   }
 
   // Generate all lesson dates (single or recurring)
-  let lessonDates: Date[];
-  if (is_recurring && recurring_months) {
-    if (recurring_frequency === 'weekly') {
-      // Weekly lessons: 4 lessons per month
-      const totalWeeks = recurring_months * 4;
-      lessonDates = generateWeeklyRecurringDates(startDate, totalWeeks);
-    } else if (recurring_frequency === 'biweekly') {
-      // Bi-weekly lessons: 2 lessons per month (every 14 days)
-      const totalBiweekly = recurring_months * 2;
-      lessonDates = generateBiweeklyRecurringDates(startDate, totalBiweekly);
+  const lessonDates: Date[] = is_recurring && recurring_months
+    ? generateRecurringDates(startDate, recurring_frequency ?? 'monthly', recurring_months)
+    : [startDate];
+
+  // Dates the student explicitly chose to skip (conflicting occurrences in the preview)
+  const skipSet = new Set<string>(
+    (Array.isArray(skip_dates) ? skip_dates : []).map((d: string) => new Date(d).toISOString())
+  );
+
+  // Single source of truth: re-check conflicts at write time (shared with preflight)
+  const statuses = await checkOccurrenceConflicts(lessonDates, {
+    duration,
+    locationType: location_type,
+    bookingStudentId,
+  });
+
+  // Partition occurrences into bookable vs skipped (conflict OR user-skipped)
+  const datesToBook: Date[] = [];
+  const skipped: { date: string; reason: string }[] = [];
+  for (let i = 0; i < lessonDates.length; i++) {
+    const iso = lessonDates[i].toISOString();
+    if (statuses[i].status === 'conflict') {
+      skipped.push({ date: iso, reason: statuses[i].reason ?? 'overlap' });
+    } else if (skipSet.has(iso)) {
+      skipped.push({ date: iso, reason: 'user_skipped' });
     } else {
-      // Monthly lessons (legacy): 1 lesson per month
-      lessonDates = generateMonthlyRecurringDates(startDate, recurring_months);
+      datesToBook.push(lessonDates[i]);
     }
-  } else {
-    lessonDates = [startDate];
   }
 
-  // Check for conflicts on all dates
-  // For in-person lessons by OTHER students, add commute buffer time before and after
-  // User's own back-to-back in-person lessons are allowed (same location, no commute)
-  const bufferMs = commuteConfig.bufferMinutes * 60 * 1000;
-  
-  for (const date of lessonDates) {
-    const lessonEnd = new Date(date.getTime() + duration * 60 * 1000);
-    
-    // First check for exact overlaps (applies to all lessons)
-    const { data: exactConflicts } = await supabase
-      .from('lessons')
-      .select('id, location_type, student_id')
-      .neq('status', 'cancelled')
-      .lt('start_time', lessonEnd.toISOString())
-      .gt('end_time', date.toISOString());
-
-    if (exactConflicts && exactConflicts.length > 0) {
-      return NextResponse.json(
-        { error: `Time slot conflict on ${date.toLocaleDateString()}` },
-        { status: 409 }
-      );
-    }
-
-    // Now check for buffer conflicts with OTHER students' in-person lessons
-    // Only apply buffer if the new lesson is in-person OR conflicts with someone else's in-person lesson
-    if (location_type === 'in-person') {
-      const conflictStart = new Date(date.getTime() - bufferMs);
-      const conflictEnd = new Date(lessonEnd.getTime() + bufferMs);
-      
-      const { data: bufferConflicts } = await supabase
-        .from('lessons')
-        .select('id, location_type, student_id')
-        .neq('status', 'cancelled')
-        .neq('student_id', bookingStudentId) // Exclude this student's own lessons - they can book back-to-back
-        .eq('location_type', 'in-person') // Only in-person lessons need buffer
-        .lt('start_time', conflictEnd.toISOString())
-        .gt('end_time', conflictStart.toISOString());
-
-      if (bufferConflicts && bufferConflicts.length > 0) {
-        return NextResponse.json(
-          { error: `Time slot conflict on ${date.toLocaleDateString()}. A ${commuteConfig.bufferMinutes}-minute buffer is required between in-person lessons with different students for travel time.` },
-          { status: 409 }
-        );
-      }
-    }
+  // Nothing bookable: surface a structured conflict so the modal can re-render the breakdown
+  if (datesToBook.length === 0) {
+    return NextResponse.json(
+      {
+        error: 'None of these times are available. Please pick a different time.',
+        occurrences: statuses,
+      },
+      { status: 409 }
+    );
   }
 
   // Get student info for calendar events
@@ -259,8 +236,8 @@ export async function POST(request: NextRequest) {
   // Create all lessons
   const createdLessons = [];
   
-  for (let i = 0; i < lessonDates.length; i++) {
-    const lessonStart = lessonDates[i];
+  for (let i = 0; i < datesToBook.length; i++) {
+    const lessonStart = datesToBook[i];
     const lessonEnd = new Date(lessonStart.getTime() + duration * 60 * 1000);
 
     // Create Zoom meeting if lesson is virtual
@@ -301,7 +278,7 @@ export async function POST(request: NextRequest) {
       const calendarEvent = await createGoogleCalendarEvent(
         adminId,
         eventTitle,
-        `Lesson Type: ${lessonTypeInfo?.name}\nStudent: ${studentName}${location_type === 'in-person' && location_address ? `\nAddress: ${location_address}` : ''}${notes ? `\nNotes: ${notes}` : ''}${zoomJoinUrl ? `\nZoom: ${zoomJoinUrl}` : ''}${is_recurring ? `\nRecurring: ${i + 1} of ${lessonDates.length}` : ''}`,
+        `Lesson Type: ${lessonTypeInfo?.name}\nStudent: ${studentName}${location_type === 'in-person' && location_address ? `\nAddress: ${location_address}` : ''}${notes ? `\nNotes: ${notes}` : ''}${zoomJoinUrl ? `\nZoom: ${zoomJoinUrl}` : ''}${is_recurring ? `\nRecurring: ${i + 1} of ${datesToBook.length}` : ''}`,
         lessonStart,
         lessonEnd,
         locationDisplay
@@ -531,83 +508,8 @@ Questions or need to reschedule? Reply to this email!
 
   // Return first lesson for single booking, or all for recurring
   return NextResponse.json(
-    is_recurring ? { lessons: createdLessons, count: createdLessons.length } : createdLessons[0],
+    is_recurring ? { lessons: createdLessons, count: createdLessons.length, skipped } : createdLessons[0],
     { status: 201 }
   );
 }
 
-// Helper to get the Nth weekday of a month
-function getNthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): Date | null {
-  const firstDay = new Date(year, month, 1);
-  let count = 0;
-  
-  for (let day = 1; day <= 31; day++) {
-    const date = new Date(year, month, day);
-    if (date.getMonth() !== month) break; // Went to next month
-    
-    if (date.getDay() === weekday) {
-      count++;
-      if (count === n) {
-        return date;
-      }
-    }
-  }
-  
-  return null; // Requested week doesn't exist in this month
-}
-
-// Generate weekly recurring lesson dates (same day each week)
-function generateWeeklyRecurringDates(startDate: Date, weeks: number): Date[] {
-  const dates: Date[] = [];
-  const hours = startDate.getHours();
-  const minutes = startDate.getMinutes();
-
-  for (let i = 0; i < weeks; i++) {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + (i * 7));
-    date.setHours(hours, minutes, 0, 0);
-    dates.push(date);
-  }
-
-  return dates;
-}
-
-// Generate bi-weekly recurring lesson dates (every 14 days)
-function generateBiweeklyRecurringDates(startDate: Date, count: number): Date[] {
-  const dates: Date[] = [];
-  const hours = startDate.getHours();
-  const minutes = startDate.getMinutes();
-
-  for (let i = 0; i < count; i++) {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + (i * 14));
-    date.setHours(hours, minutes, 0, 0);
-    dates.push(date);
-  }
-
-  return dates;
-}
-
-// Generate monthly recurring lesson dates (same relative weekday each month)
-function generateMonthlyRecurringDates(startDate: Date, months: number): Date[] {
-  const dates: Date[] = [];
-  const weekday = startDate.getDay();
-  const weekOfMonth = Math.ceil(startDate.getDate() / 7);
-  const hours = startDate.getHours();
-  const minutes = startDate.getMinutes();
-
-  for (let i = 0; i < months; i++) {
-    const targetMonth = startDate.getMonth() + i;
-    const targetYear = startDate.getFullYear() + Math.floor(targetMonth / 12);
-    const adjustedMonth = targetMonth % 12;
-
-    const date = getNthWeekdayOfMonth(targetYear, adjustedMonth, weekday, weekOfMonth);
-    
-    if (date) {
-      date.setHours(hours, minutes, 0, 0);
-      dates.push(date);
-    }
-  }
-
-  return dates;
-}
