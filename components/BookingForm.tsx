@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { lessonTypes, getLessonType, LessonType, formatDuration, formatRate, getWeeklySavings, getBiweeklySavings } from '@/config/lessonTypes';
+import { useState, useEffect, useRef } from 'react';
+import { lessonTypes, getLessonType, LessonType, formatDuration, formatRate, getWeeklySavings, getBiweeklySavings, getWeeklyPerLessonRate, getBiweeklyPerLessonRate } from '@/config/lessonTypes';
 import { cancellationPolicy } from '@/config/cancellationPolicy';
+import RecurringConflictBreakdown from '@/components/RecurringConflictBreakdown';
+import type { OccurrenceStatus } from '@/types';
 
 interface BookingFormProps {
   selectedDate: Date;
@@ -14,6 +16,7 @@ interface BookingFormProps {
   maxDuration?: number; // Maximum available time in minutes for the selected slot
   discountPercent?: number; // Student's discount percentage (0-100)
   defaultAddress?: string; // Pre-fill address from user profile
+  submitError?: string | null; // Inline error from a failed booking submit
 }
 
 export interface BookingData {
@@ -24,6 +27,7 @@ export interface BookingData {
   is_recurring: boolean;
   recurring_frequency?: 'weekly' | 'biweekly';
   recurring_months?: number; // For weekly/biweekly: how many months to book
+  skip_dates?: string[]; // ISO dates of conflicting occurrences to skip
 }
 
 export default function BookingForm({
@@ -36,6 +40,7 @@ export default function BookingForm({
   maxDuration,
   discountPercent = 0,
   defaultAddress = '',
+  submitError = null,
 }: BookingFormProps) {
   // Filter lesson types: show trial lessons only for first-time students
   // Also filter by max duration if specified
@@ -54,6 +59,12 @@ export default function BookingForm({
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringFrequency, setRecurringFrequency] = useState<'weekly' | 'biweekly'>('weekly');
   const [recurringMonths, setRecurringMonths] = useState(1);
+  const [conflictState, setConflictState] = useState<'idle' | 'checking' | 'all_clear' | 'partial' | 'all_conflict' | 'check_error'>('idle');
+  const [occurrences, setOccurrences] = useState<OccurrenceStatus[]>([]);
+  const requestIdRef = useRef(0);
+
+  const totalCount = occurrences.length;
+  const availableCount = occurrences.filter((o) => o.status === 'available').length;
 
   const selectedLessonType = getLessonType(lessonType);
   const isTrialLesson = selectedLessonType?.isTrialLesson ?? false;
@@ -72,22 +83,87 @@ export default function BookingForm({
     }
   }, [isTrialLesson, isRecurring]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!agreedToPolicy) {
-      alert('Please agree to the cancellation policy');
+  // Live availability preflight for recurring plans (advisory; server re-checks on submit).
+  useEffect(() => {
+    if (!isRecurring || isTrialLesson) {
+      setConflictState('idle');
+      setOccurrences([]);
       return;
     }
+
+    setConflictState('checking');
+    const reqId = ++requestIdRef.current;
+    const controller = new AbortController();
+
+    const handle = setTimeout(async () => {
+      try {
+        const [h, m] = selectedTime.split(':').map(Number);
+        const startTime = new Date(selectedDate);
+        startTime.setHours(h, m, 0, 0);
+
+        const res = await fetch('/api/lessons/preflight', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            lesson_type: lessonType,
+            location_type: locationType,
+            start_time: startTime.toISOString(),
+            is_recurring: true,
+            recurring_frequency: recurringFrequency,
+            recurring_months: recurringMonths,
+          }),
+        });
+        if (!res.ok) throw new Error('preflight failed');
+        const data = await res.json();
+        if (reqId !== requestIdRef.current) return; // a newer request superseded this one
+
+        const occ: OccurrenceStatus[] = data.occurrences ?? [];
+        const avail = data.availableCount ?? 0;
+        setOccurrences(occ);
+        setConflictState(avail === 0 ? 'all_conflict' : avail < occ.length ? 'partial' : 'all_clear');
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
+        if (reqId !== requestIdRef.current) return;
+        setConflictState('check_error');
+        setOccurrences([]);
+      }
+    }, 250);
+
+    return () => {
+      clearTimeout(handle);
+      controller.abort();
+    };
+  }, [isRecurring, isTrialLesson, lessonType, locationType, recurringFrequency, recurringMonths, selectedDate, selectedTime]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!agreedToPolicy) {
+      setPolicyNeedsAttention(true);
+      setTimeout(() => setPolicyNeedsAttention(false), 2000);
+      return;
+    }
+
+    // Don't submit a recurring plan with zero open dates.
+    if (isRecurring && !isTrialLesson && conflictState === 'all_conflict') {
+      return;
+    }
+
+    const recurring = isRecurring && !isTrialLesson;
+    const skip_dates = recurring && conflictState === 'partial'
+      ? occurrences.filter((o) => o.status === 'conflict').map((o) => o.date)
+      : undefined;
 
     await onSubmit({
       lesson_type: lessonType,
       location_type: locationType,
       location_address: locationType === 'in-person' ? locationAddress : undefined,
       notes,
-      is_recurring: isRecurring && !isTrialLesson,
-      recurring_frequency: isRecurring && !isTrialLesson ? recurringFrequency : undefined,
-      recurring_months: isRecurring && !isTrialLesson ? recurringMonths : undefined,
+      is_recurring: recurring,
+      recurring_frequency: recurring ? recurringFrequency : undefined,
+      recurring_months: recurring ? recurringMonths : undefined,
+      skip_dates,
     });
   };
 
@@ -320,6 +396,14 @@ export default function BookingForm({
                   {totalLessons} lessons total • Billed {formatRate(selectedLessonType ? getActiveMonthlyRate(selectedLessonType) : 0)}/month
                 </p>
               </div>
+              {conflictState !== 'idle' && (
+                <RecurringConflictBreakdown
+                  state={conflictState}
+                  occurrences={occurrences}
+                  availableCount={availableCount}
+                  totalCount={totalCount}
+                />
+              )}
             </div>
           )}
         </div>
@@ -458,7 +542,26 @@ export default function BookingForm({
               </span>
             </div>
           )}
-          {isRecurring && !isTrialLesson ? (
+          {isRecurring && !isTrialLesson && conflictState === 'partial' ? (
+            <>
+              <div className="flex justify-between text-xl font-bold text-gray-900 dark:text-white">
+                <span>This month</span>
+                <span className="text-green-600 dark:text-green-400">
+                  {formatRate(applyDiscount(Math.round(
+                    (recurringFrequency === 'biweekly'
+                      ? getBiweeklyPerLessonRate(lessonType)
+                      : getWeeklyPerLessonRate(lessonType)) * availableCount
+                  )))}
+                </span>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {availableCount} of {totalLessons} lessons — billed at your {recurringFrequency === 'biweekly' ? 'bi-weekly' : 'weekly'} plan rate. Skipped dates aren&apos;t charged.
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                Future months bill at the full {formatRate(applyDiscount(getActiveMonthlyRate(selectedLessonType)))}/mo rate.
+              </p>
+            </>
+          ) : isRecurring && !isTrialLesson ? (
             <>
               <div className="flex justify-between text-xl font-bold text-gray-900 dark:text-white">
                 <span>Monthly Rate</span>
@@ -503,6 +606,13 @@ export default function BookingForm({
         </div>
       )}
 
+      {/* Inline submit error (replaces the old window.alert) */}
+      {submitError && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-md px-3 py-2">
+          <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex space-x-3 pt-2">
         <button
@@ -510,10 +620,12 @@ export default function BookingForm({
           onClick={onCancel}
           className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
         >
-          Cancel
+          {isRecurring && !isTrialLesson && (conflictState === 'partial' || conflictState === 'all_conflict')
+            ? 'Pick a different time'
+            : 'Cancel'}
         </button>
         {/* Wrapper div to capture clicks on disabled button */}
-        <div 
+        <div
           className="flex-1 cursor-pointer"
           onClick={() => {
             if (!agreedToPolicy && !isLoading) {
@@ -524,12 +636,26 @@ export default function BookingForm({
         >
           <button
             type="submit"
-            disabled={isLoading || !agreedToPolicy}
+            disabled={
+              isLoading ||
+              !agreedToPolicy ||
+              (isRecurring && !isTrialLesson && (conflictState === 'checking' || conflictState === 'all_conflict'))
+            }
             className={`w-full px-4 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl disabled:shadow-none ${
               !agreedToPolicy && !isLoading ? 'pointer-events-none' : ''
             }`}
           >
-            {isLoading ? 'Booking...' : isRecurring ? `Book ${totalLessons} Lessons` : 'Book Lesson'}
+            {isLoading
+              ? 'Booking...'
+              : isRecurring && !isTrialLesson
+                ? conflictState === 'checking'
+                  ? 'Checking availability…'
+                  : conflictState === 'all_conflict'
+                    ? 'No open dates — pick another time'
+                    : conflictState === 'partial'
+                      ? `Book ${availableCount} Available Lessons`
+                      : `Book ${totalLessons} Lessons`
+                : 'Book Lesson'}
           </button>
         </div>
       </div>
