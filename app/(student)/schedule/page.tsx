@@ -20,6 +20,8 @@ export default function SchedulePage() {
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [bookingMessage, setBookingMessage] = useState('');
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [allLessonsForScheduling, setAllLessonsForScheduling] = useState<Lesson[]>([]);
   const [lessonToCancel, setLessonToCancel] = useState<Lesson | null>(null);
   const [discountPercent, setDiscountPercent] = useState(0);
@@ -193,7 +195,8 @@ export default function SchedulePage() {
     if (!selectedTime) return;
 
     setIsSubmitting(true);
-    
+    setSubmitError(null);
+
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const startTime = new Date(selectedDate);
     startTime.setHours(hours, minutes, 0, 0);
@@ -211,24 +214,31 @@ export default function SchedulePage() {
           is_recurring: data.is_recurring,
           recurring_frequency: data.recurring_frequency,
           recurring_months: data.recurring_months,
+          skip_dates: data.skip_dates,
         }),
       });
 
       if (res.ok) {
+        const result = await res.json();
+        const skippedCount = Array.isArray(result?.skipped) ? result.skipped.length : 0;
+        const bookedCount = typeof result?.count === 'number' ? result.count : 1;
+        setBookingMessage(
+          skippedCount > 0
+            ? `Booked ${bookedCount} of ${bookedCount + skippedCount} lessons — ${skippedCount} ${skippedCount === 1 ? 'date was' : 'dates were'} unavailable.`
+            : ''
+        );
         setBookingSuccess(true);
         setShowBookingForm(false);
         setSelectedTime(null);
         await fetchData();
-        
-        // Reset success message after delay
-        setTimeout(() => setBookingSuccess(false), 5000);
+        setTimeout(() => setBookingSuccess(false), 6000);
       } else {
         const error = await res.json();
-        alert(error.error || 'Failed to book lesson');
+        setSubmitError(error.error || 'Failed to book lesson. Please try again.');
       }
     } catch (error) {
       console.error('Error booking lesson:', error);
-      alert('Failed to book lesson');
+      setSubmitError('Something went wrong while booking. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -260,7 +270,7 @@ export default function SchedulePage() {
         <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-2 fade-in duration-300">
           <div className="p-4 bg-green-50 dark:bg-green-900/90 border border-green-200 dark:border-green-700 rounded-lg shadow-lg backdrop-blur-sm">
             <p className="text-green-800 dark:text-green-200 font-medium">✓ Lesson booked successfully!</p>
-            <p className="text-green-600 dark:text-green-400 text-sm">Check your email for confirmation details.</p>
+            <p className="text-green-600 dark:text-green-400 text-sm">{bookingMessage || 'Check your email for confirmation details.'}</p>
           </div>
         </div>
       )}
@@ -354,6 +364,7 @@ export default function SchedulePage() {
         onClose={() => {
           setShowBookingForm(false);
           setSelectedTime(null);
+          setSubmitError(null);
         }}
         title="Book Your Lesson"
         size="lg"
@@ -366,8 +377,10 @@ export default function SchedulePage() {
             onCancel={() => {
               setShowBookingForm(false);
               setSelectedTime(null);
+              setSubmitError(null);
             }}
             isLoading={isSubmitting}
+            submitError={submitError}
             isFirstLesson={lessons.length === 0 && isReturningStudent === false}
             maxDuration={(() => {
               const slot = timeSlots.find(s => s.start === selectedTime);
