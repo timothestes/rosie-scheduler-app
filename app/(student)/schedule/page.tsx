@@ -215,6 +215,7 @@ export default function SchedulePage() {
           recurring_frequency: data.recurring_frequency,
           recurring_months: data.recurring_months,
           skip_dates: data.skip_dates,
+          allow_partial: true,
         }),
       });
 

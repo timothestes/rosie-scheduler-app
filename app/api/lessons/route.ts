@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { lesson_type, location_type, location_address, start_time, notes, is_recurring, recurring_frequency, recurring_months, skip_dates, student_id: body_student_id, send_confirmation_email } = body;
+  const { lesson_type, location_type, location_address, start_time, notes, is_recurring, recurring_frequency, recurring_months, skip_dates, student_id: body_student_id, send_confirmation_email, allow_partial } = body;
 
   // Calculate end time based on lesson type duration
   const duration = getLessonDuration(lesson_type);
@@ -193,6 +193,19 @@ export async function POST(request: NextRequest) {
     } else {
       datesToBook.push(lessonDates[i]);
     }
+  }
+
+  // Callers that haven't opted into partial booking (e.g. the admin scheduling flow)
+  // keep the original all-or-nothing behavior: any conflicting date fails the whole booking.
+  const conflictSkips = skipped.filter((s) => s.reason !== 'user_skipped');
+  if (!allow_partial && conflictSkips.length > 0) {
+    return NextResponse.json(
+      {
+        error: `Time slot conflict on ${new Date(conflictSkips[0].date).toLocaleDateString()}`,
+        occurrences: statuses,
+      },
+      { status: 409 }
+    );
   }
 
   // Nothing bookable: surface a structured conflict so the modal can re-render the breakdown
@@ -431,6 +444,11 @@ export async function POST(request: NextRequest) {
                 <p style="margin: 10px 0 0 0; font-size: 13px; color: #666;">
                   Payment is due on the 1st of each month. You can pay via Venmo, Zelle, or your preferred method.
                 </p>
+                ${skipped.length > 0 ? `
+                <p style="margin: 12px 0 0 0; font-size: 13px; color: #b45309; background:#fffbeb; border-left:4px solid #f59e0b; padding:10px; border-radius:4px;">
+                  <strong>Heads up:</strong> ${skipped.length} requested date${skipped.length > 1 ? 's were' : ' was'} unavailable and ${skipped.length > 1 ? 'have' : 'has'} not been scheduled or charged. You're only billed for the ${createdLessons.length} lesson${createdLessons.length > 1 ? 's' : ''} listed above &mdash; your first month is prorated accordingly. Future months bill at the full monthly rate.
+                </p>
+                ` : ''}
               ` : `
                 <p style="margin: 5px 0; font-size: 14px;">
                   <strong>Price per lesson:</strong> ${formatRate(rate)}
@@ -484,7 +502,8 @@ ${isRecurringBooking && (recurring_frequency === 'weekly' || recurring_frequency
   ? `Frequency: ${recurring_frequency === 'biweekly' ? 'Bi-weekly (every 2 weeks)' : 'Weekly'}
 Monthly Rate: ${formatRate(recurring_frequency === 'biweekly' ? (lessonTypeInfo?.biweeklyMonthlyRate ?? 0) : (lessonTypeInfo?.weeklyMonthlyRate ?? 0))}/month
 Duration: ${recurring_months} month${recurring_months > 1 ? 's' : ''}
-Payment is due on the 1st of each month.`
+Payment is due on the 1st of each month.${skipped.length > 0 ? `
+Note: ${skipped.length} requested date(s) were unavailable and have not been scheduled or charged. You're only billed for the ${createdLessons.length} lesson(s) listed above — your first month is prorated accordingly. Future months bill at the full monthly rate.` : ''}`
   : `Price per lesson: ${formatRate(rate)}
 ${isRecurringBooking ? `Total for ${createdLessons.length} lessons: ${formatRate(rate * createdLessons.length)}` : ''}
 Payment is due on the day of each lesson.`}
