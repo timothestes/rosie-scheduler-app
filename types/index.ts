@@ -151,3 +151,18 @@ export interface AuthUser {
 }
 
 export type UserRole = 'admin' | 'student' | null;
+
+// Per-occurrence conflict status for recurring-booking preflight + partial booking.
+export interface OccurrenceStatus {
+  date: string; // ISO datetime of the occurrence
+  index: number; // 0-based position in the series
+  status: 'available' | 'conflict';
+  reason: 'overlap' | 'commute_buffer' | null;
+  conflictIsOwnLesson: boolean;
+}
+
+export interface PreflightResponse {
+  occurrences: OccurrenceStatus[];
+  availableCount: number;
+  totalCount: number;
+}

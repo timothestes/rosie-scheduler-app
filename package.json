@@ -3,7 +3,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@react-email/components": "^1.0.7",
@@ -26,6 +28,7 @@
     "@types/react": "18.2.48",
     "@types/react-dom": "18.2.18",
     "baseline-browser-mapping": "^2.9.16",
-    "encoding": "^0.1.13"
+    "encoding": "^0.1.13",
+    "vitest": "^2.1.9"
   }
 }
