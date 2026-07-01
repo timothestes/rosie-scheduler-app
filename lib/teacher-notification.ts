@@ -39,6 +39,15 @@ export interface TeacherBookingNotificationInput
   encouragement?: string;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function formatPacific(iso: string): { date: string; time: string } {
   const d = new Date(iso);
   return {
@@ -94,9 +103,9 @@ export function buildTeacherBookingEmail(
       <h1 style="color: white; margin: 0; font-size: 26px;">🎉 New Booking!</h1>
     </div>
     <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
-      <p style="font-size: 16px; margin: 0 0 16px 0;">Hi ${firstName},</p>
+      <p style="font-size: 16px; margin: 0 0 16px 0;">Hi ${escapeHtml(firstName)},</p>
       <p style="font-size: 16px; margin: 0 0 20px 0;">
-        <strong>${studentName}</strong> just booked ${lessonNoun}! 🎶
+        <strong>${escapeHtml(studentName)}</strong> just booked ${lessonNoun}! 🎶
       </p>
       <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e0e0e0;">
         <h2 style="font-size: 16px; margin-top: 0; color: #667eea;">${isRecurring ? 'Lessons' : 'Lesson'}</h2>
@@ -107,12 +116,12 @@ export function buildTeacherBookingEmail(
           ${isRecurring ? `<p style="font-weight:600; color:#667eea; margin:0 0 6px 0;">Lesson ${i + 1}</p>` : ''}
           <p style="margin: 5px 0;"><strong>📅 Date:</strong> ${r.date}</p>
           <p style="margin: 5px 0;"><strong>🕐 Time:</strong> ${r.time}</p>
-          ${r.zoom ? `<p style="margin: 5px 0;"><strong>💻 Zoom:</strong> <a href="${r.zoom}" style="color:#0066cc; word-break:break-all;">${r.zoom}</a></p>` : ''}
+          ${r.zoom ? `<p style="margin: 5px 0;"><strong>💻 Zoom:</strong> <a href="${escapeHtml(r.zoom)}" style="color:#0066cc; word-break:break-all;">${escapeHtml(r.zoom)}</a></p>` : ''}
         `
           )
           .join('')}
-        <p style="margin: 12px 0 0 0;"><strong>📚 Type:</strong> ${lessonTypeName}</p>
-        <p style="margin: 5px 0 0 0;"><strong>📍 Location:</strong> ${locationLabel}</p>
+        <p style="margin: 12px 0 0 0;"><strong>📚 Type:</strong> ${escapeHtml(lessonTypeName)}</p>
+        <p style="margin: 5px 0 0 0;"><strong>📍 Location:</strong> ${escapeHtml(locationLabel)}</p>
       </div>
       ${
         skippedNote

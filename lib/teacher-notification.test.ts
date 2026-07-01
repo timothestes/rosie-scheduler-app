@@ -79,6 +79,12 @@ describe('buildTeacherBookingEmail', () => {
     expect(text).toContain('unavailable');
   });
 
+  it('uses singular grammar in the skipped note when exactly one date was skipped', () => {
+    const { html, text } = buildTeacherBookingEmail({ ...baseInput(), skippedCount: 1 });
+    expect(html).toContain('1 requested date was unavailable');
+    expect(text).toContain('1 requested date was unavailable');
+  });
+
   it('renders a Zoom link when present', () => {
     const { html } = buildTeacherBookingEmail({
       ...baseInput(),
