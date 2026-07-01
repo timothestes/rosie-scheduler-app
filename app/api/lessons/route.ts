@@ -5,6 +5,7 @@ import { createZoomMeeting, getZoomAccessToken } from '@/lib/zoom';
 import { createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { getPrimaryAdminEmail } from '@/lib/utils';
 import { resend, EMAIL_CONFIG } from '@/lib/resend';
+import { sendTeacherBookingNotification } from '@/lib/teacher-notification';
 import { generateRecurringDates } from '@/lib/recurring-dates';
 import { checkOccurrenceConflicts } from '@/lib/conflicts';
 
@@ -523,6 +524,36 @@ Questions or need to reschedule? Reply to this email!
   } catch (emailError) {
     console.error('Error sending booking confirmation email:', emailError);
     // Don't fail the booking if email fails
+  }
+
+  // Notify the teacher when a STUDENT books (not when an admin books on their behalf).
+  // One email per booking action; never blocks or fails the booking.
+  if (!callerAdmin && createdLessons.length > 0 && adminId) {
+    try {
+      const { data: teacher } = await supabase
+        .from('users')
+        .select('email, full_name')
+        .eq('id', adminId)
+        .single();
+
+      if (teacher?.email) {
+        await sendTeacherBookingNotification({
+          teacherEmail: teacher.email,
+          teacherName: teacher.full_name ?? undefined,
+          studentName,
+          lessons: createdLessons.map((l) => ({
+            start_time: l.start_time,
+            zoom_join_url: l.zoom_join_url,
+          })),
+          lessonTypeName: lessonTypeInfo?.name || lesson_type,
+          locationLabel: location_type === 'zoom' ? 'Zoom' : (location_address || 'In-Person'),
+          skippedCount: skipped.length,
+        });
+      }
+    } catch (teacherEmailError) {
+      console.error('Error sending teacher booking notification:', teacherEmailError);
+      // Don't fail the booking if the teacher notification fails
+    }
   }
 
   // Return first lesson for single booking, or all for recurring
