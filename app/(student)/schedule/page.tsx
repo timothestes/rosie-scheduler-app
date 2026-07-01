@@ -8,6 +8,8 @@ import LessonCard from '@/components/LessonCard';
 import CancelLessonModal from '@/components/CancelLessonModal';
 import Modal from '@/components/Modal';
 import { formatDate, formatTime24to12, parseTimeToDate } from '@/lib/utils';
+import { maxAvailableDuration } from '@/lib/conflicts-core';
+import { commuteConfig } from '@/config/commute';
 import type { Lesson, Availability, AvailabilityOverride, TimeSlot } from '@/types';
 
 export default function SchedulePage() {
@@ -387,8 +389,23 @@ export default function SchedulePage() {
               const slot = timeSlots.find(s => s.start === selectedTime);
               if (!slot?.windowEnd) return undefined;
               const [startH, startM] = selectedTime.split(':').map(Number);
+              const start = new Date(selectedDate);
+              start.setHours(startH, startM, 0, 0);
               const [endH, endM] = slot.windowEnd.split(':').map(Number);
-              return (endH * 60 + endM) - (startH * 60 + startM);
+              const windowEnd = new Date(selectedDate);
+              windowEnd.setHours(endH, endM, 0, 0);
+              // Cap the offered duration at the next booking, not just the window
+              // end, so an hour-long lesson can't be booked into a 30-min gap.
+              // Booked slots hide student_id for privacy, so map is_own_lesson
+              // to synthetic ids the shared helper can compare.
+              const existing = allDayLessons.map((l) => ({
+                start_time: l.start_time,
+                end_time: l.end_time,
+                location_type: l.location_type,
+                status: l.status,
+                student_id: (l as Lesson & { is_own_lesson?: boolean }).is_own_lesson ? 'me' : 'other',
+              }));
+              return maxAvailableDuration(start, windowEnd, 'me', existing, commuteConfig.bufferMinutes * 60 * 1000);
             })()}
             discountPercent={discountPercent}
             defaultAddress={userAddress}

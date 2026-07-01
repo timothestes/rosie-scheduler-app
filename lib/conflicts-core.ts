@@ -58,3 +58,32 @@ export function evaluateConflict(
 
   return { status: 'available', reason: null, conflictIsOwnLesson: false };
 }
+
+// Largest lesson length (in minutes) that can START at `start` without running
+// into a later booking, capped at the availability window end. Mirrors the
+// overlap rules in evaluateConflict / the grid's wouldOverlap so the booking
+// form never offers a duration the server would reject. Bookings that already
+// cover `start` don't constrain here — the slot itself is disabled upstream.
+export function maxAvailableDuration(
+  start: Date,
+  windowEnd: Date,
+  bookingStudentId: string,
+  existing: ExistingLesson[],
+  bufferMs: number
+): number {
+  const startMs = start.getTime();
+  let maxEndMs = windowEnd.getTime();
+
+  for (const lesson of existing) {
+    if (lesson.status === 'cancelled') continue;
+    const ls = new Date(lesson.start_time).getTime();
+    // Another student's in-person lesson also needs a commute buffer beforehand.
+    const needsBuffer = lesson.location_type === 'in-person' && lesson.student_id !== bookingStudentId;
+    const boundary = needsBuffer ? ls - bufferMs : ls;
+    if (boundary > startMs && boundary < maxEndMs) {
+      maxEndMs = boundary;
+    }
+  }
+
+  return Math.max(0, Math.round((maxEndMs - startMs) / 60000));
+}

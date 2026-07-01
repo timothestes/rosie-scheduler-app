@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateConflict, type ExistingLesson } from './conflicts-core';
+import { evaluateConflict, maxAvailableDuration, type ExistingLesson } from './conflicts-core';
 
 const BUF = 30 * 60 * 1000; // 30 min
 const occStart = new Date('2026-07-03T16:00:00.000Z');
@@ -64,5 +64,44 @@ describe('evaluateConflict', () => {
 
   it('ignores cancelled lessons', () => {
     expect(evaluateConflict(occStart, occEnd, 'zoom', ME, [lesson({ status: 'cancelled' })], BUF).status).toBe('available');
+  });
+});
+
+describe('maxAvailableDuration', () => {
+  // Rosie's availability window on this day runs 3:00 PM (start) to 6:00 PM.
+  const start = new Date('2026-07-03T15:00:00.000Z'); // a slot the student picked
+  const windowEnd = new Date('2026-07-03T18:00:00.000Z');
+
+  it('returns the full window when nothing is booked', () => {
+    expect(maxAvailableDuration(start, windowEnd, ME, [], BUF)).toBe(180);
+  });
+
+  it('caps duration at the next booking (the 3:00 PM / 3:30 PM bug)', () => {
+    // Something is booked at 3:30 PM. A lesson starting at 3:00 PM can only be 30 min.
+    const at330 = lesson({ start_time: '2026-07-03T15:30:00.000Z', end_time: '2026-07-03T16:00:00.000Z' });
+    expect(maxAvailableDuration(start, windowEnd, ME, [at330], BUF)).toBe(30);
+  });
+
+  it('reserves the commute buffer before another student\'s in-person lesson', () => {
+    // Other student's in-person lesson at 4:00 PM -> 30-min buffer means we must end by 3:30 PM.
+    const at4pm = lesson({ location_type: 'in-person', start_time: '2026-07-03T16:00:00.000Z', end_time: '2026-07-03T16:30:00.000Z' });
+    expect(maxAvailableDuration(start, windowEnd, ME, [at4pm], BUF)).toBe(30);
+  });
+
+  it('does not reserve a buffer before the student\'s own lesson', () => {
+    const ownAt4pm = lesson({ student_id: ME, location_type: 'in-person', start_time: '2026-07-03T16:00:00.000Z', end_time: '2026-07-03T16:30:00.000Z' });
+    expect(maxAvailableDuration(start, windowEnd, ME, [ownAt4pm], BUF)).toBe(60);
+  });
+
+  it('takes the earliest constraining booking when several exist', () => {
+    const at5pm = lesson({ start_time: '2026-07-03T17:00:00.000Z', end_time: '2026-07-03T17:30:00.000Z' });
+    const at4pm = lesson({ start_time: '2026-07-03T16:00:00.000Z', end_time: '2026-07-03T16:30:00.000Z' });
+    expect(maxAvailableDuration(start, windowEnd, ME, [at5pm, at4pm], BUF)).toBe(60);
+  });
+
+  it('ignores cancelled lessons and lessons entirely before the start', () => {
+    const cancelled = lesson({ start_time: '2026-07-03T15:30:00.000Z', end_time: '2026-07-03T16:00:00.000Z', status: 'cancelled' });
+    const past = lesson({ start_time: '2026-07-03T14:00:00.000Z', end_time: '2026-07-03T14:30:00.000Z' });
+    expect(maxAvailableDuration(start, windowEnd, ME, [cancelled, past], BUF)).toBe(180);
   });
 });
