@@ -87,6 +87,11 @@ export function buildTeacherBookingEmail(
     ? `${lessons.length} ${lessonTypeName} lessons`
     : `a ${lessonTypeName} lesson`;
 
+  // HTML-escaped variant of lessonNoun (the plain-text body uses the raw one above).
+  const lessonNounHtml = isRecurring
+    ? `${lessons.length} ${escapeHtml(lessonTypeName)} lessons`
+    : `a ${escapeHtml(lessonTypeName)} lesson`;
+
   const skippedNote =
     skippedCount > 0
       ? `Heads up: ${skippedCount} requested date${skippedCount > 1 ? 's were' : ' was'} unavailable and ${skippedCount > 1 ? "weren't" : "wasn't"} scheduled.`
@@ -105,7 +110,7 @@ export function buildTeacherBookingEmail(
     <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
       <p style="font-size: 16px; margin: 0 0 16px 0;">Hi ${escapeHtml(firstName)},</p>
       <p style="font-size: 16px; margin: 0 0 20px 0;">
-        <strong>${escapeHtml(studentName)}</strong> just booked ${lessonNoun}! 🎶
+        <strong>${escapeHtml(studentName)}</strong> just booked ${lessonNounHtml}! 🎶
       </p>
       <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e0e0e0;">
         <h2 style="font-size: 16px; margin-top: 0; color: #667eea;">${isRecurring ? 'Lessons' : 'Lesson'}</h2>
