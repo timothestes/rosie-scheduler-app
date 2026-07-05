@@ -15,11 +15,20 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { lesson_type, location_type, start_time, is_recurring, recurring_frequency, recurring_months } = body;
+  const { lesson_type, location_type, start_time, is_recurring, recurring_frequency, recurring_months, exclude_lesson_id, student_id } = body;
 
   if (!lesson_type || !start_time) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
+
+  // Admins may check availability on behalf of a specific student (used by the
+  // reschedule flow); everyone else is scoped to their own bookings.
+  const { data: admin } = await supabase
+    .from('admins')
+    .select('id')
+    .eq('email', user.email)
+    .single();
+  const bookingStudentId = admin && student_id ? student_id : user.id;
 
   const duration = getLessonDuration(lesson_type);
   const startDate = new Date(start_time);
@@ -32,7 +41,8 @@ export async function POST(request: NextRequest) {
     const statuses = await checkOccurrenceConflicts(occurrences, {
       duration,
       locationType: location_type ?? 'zoom',
-      bookingStudentId: user.id,
+      bookingStudentId,
+      excludeLessonId: admin ? exclude_lesson_id : undefined,
     });
     const availableCount = statuses.filter((s) => s.status === 'available').length;
     return NextResponse.json({ occurrences: statuses, availableCount, totalCount: statuses.length });
