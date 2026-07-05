@@ -8,6 +8,7 @@ const ME = 'student-me';
 
 function lesson(partial: Partial<ExistingLesson>): ExistingLesson {
   return {
+    id: 'other-lesson',
     start_time: '2026-07-03T16:00:00.000Z',
     end_time: '2026-07-03T16:30:00.000Z',
     location_type: 'zoom',
@@ -64,6 +65,28 @@ describe('evaluateConflict', () => {
 
   it('ignores cancelled lessons', () => {
     expect(evaluateConflict(occStart, occEnd, 'zoom', ME, [lesson({ status: 'cancelled' })], BUF).status).toBe('available');
+  });
+});
+
+describe('evaluateConflict with excludeLessonId', () => {
+  it('ignores the excluded lesson (a lesson never conflicts with itself)', () => {
+    const self = lesson({ id: 'lesson-1', student_id: ME });
+    const r = evaluateConflict(occStart, occEnd, 'zoom', ME, [self], BUF, 'lesson-1');
+    expect(r.status).toBe('available');
+  });
+
+  it('still flags a different overlapping lesson while excluding self', () => {
+    const self = lesson({ id: 'lesson-1', student_id: ME });
+    const other = lesson({ id: 'lesson-2', student_id: 'someone-else' });
+    const r = evaluateConflict(occStart, occEnd, 'zoom', ME, [self, other], BUF, 'lesson-1');
+    expect(r.status).toBe('conflict');
+    expect(r.reason).toBe('overlap');
+  });
+
+  it('excludes self from the commute-buffer check too', () => {
+    const self = lesson({ id: 'lesson-1', student_id: ME, location_type: 'in-person' });
+    const r = evaluateConflict(occStart, occEnd, 'in-person', ME, [self], BUF, 'lesson-1');
+    expect(r.status).toBe('available');
   });
 });
 

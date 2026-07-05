@@ -9,11 +9,11 @@ import type { OccurrenceStatus } from '@/types';
 // preflight endpoint call this, guaranteeing the preview matches booking.
 export async function checkOccurrenceConflicts(
   occurrences: Date[],
-  opts: { duration: number; locationType: string; bookingStudentId: string }
+  opts: { duration: number; locationType: string; bookingStudentId: string; excludeLessonId?: string }
 ): Promise<OccurrenceStatus[]> {
   if (occurrences.length === 0) return [];
 
-  const { duration, locationType, bookingStudentId } = opts;
+  const { duration, locationType, bookingStudentId, excludeLessonId } = opts;
   const bufferMs = commuteConfig.bufferMinutes * 60 * 1000;
   const durationMs = duration * 60 * 1000;
 
@@ -27,7 +27,7 @@ export async function checkOccurrenceConflicts(
   const admin = createAdminClient();
   const { data, error } = await admin
     .from('lessons')
-    .select('start_time, end_time, location_type, student_id, status')
+    .select('id, start_time, end_time, location_type, student_id, status')
     .neq('status', 'cancelled')
     .lte('start_time', windowEnd.toISOString())
     .gte('end_time', windowStart.toISOString());
@@ -40,7 +40,7 @@ export async function checkOccurrenceConflicts(
 
   return occurrences.map((start, index) => {
     const end = new Date(start.getTime() + durationMs);
-    const result = evaluateConflict(start, end, locationType, bookingStudentId, existing, bufferMs);
+    const result = evaluateConflict(start, end, locationType, bookingStudentId, existing, bufferMs, excludeLessonId);
     return { date: start.toISOString(), index, ...result };
   });
 }

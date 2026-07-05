@@ -2,6 +2,7 @@
 // Kept free of `@/` imports so it is trivially unit-testable.
 
 export interface ExistingLesson {
+  id: string;
   start_time: string;
   end_time: string;
   location_type: string;
@@ -21,7 +22,8 @@ export function evaluateConflict(
   locationType: string,
   bookingStudentId: string,
   existing: ExistingLesson[],
-  bufferMs: number
+  bufferMs: number,
+  excludeLessonId?: string
 ): ConflictResult {
   const occStartMs = occStart.getTime();
   const occEndMs = occEnd.getTime();
@@ -29,6 +31,7 @@ export function evaluateConflict(
   // 1. Exact overlap with ANY non-cancelled lesson (including the student's own).
   for (const lesson of existing) {
     if (lesson.status === 'cancelled') continue;
+    if (excludeLessonId && lesson.id === excludeLessonId) continue;
     const ls = new Date(lesson.start_time).getTime();
     const le = new Date(lesson.end_time).getTime();
     if (ls < occEndMs && le > occStartMs) {
@@ -46,6 +49,7 @@ export function evaluateConflict(
     const bufEnd = occEndMs + bufferMs;
     for (const lesson of existing) {
       if (lesson.status === 'cancelled') continue;
+      if (excludeLessonId && lesson.id === excludeLessonId) continue;
       if (lesson.location_type !== 'in-person') continue;
       if (lesson.student_id === bookingStudentId) continue;
       const ls = new Date(lesson.start_time).getTime();
