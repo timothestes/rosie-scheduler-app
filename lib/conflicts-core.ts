@@ -2,7 +2,7 @@
 // Kept free of `@/` imports so it is trivially unit-testable.
 
 export interface ExistingLesson {
-  id: string;
+  id?: string;
   start_time: string;
   end_time: string;
   location_type: string;
