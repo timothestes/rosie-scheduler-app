@@ -213,4 +213,56 @@ export async function deleteGoogleCalendarEvent(
   }
 }
 
+// Update an existing Google Calendar event (PATCH preserves the event id).
+export async function updateGoogleCalendarEvent(
+  adminUserId: string,
+  eventId: string,
+  updates: {
+    summary?: string;
+    description?: string;
+    startTime: Date;
+    endTime: Date;
+    location?: string;
+  }
+): Promise<boolean> {
+  const accessToken = await getValidAccessToken(adminUserId);
+
+  if (!accessToken) {
+    console.error('No valid Google access token for updating calendar event');
+    return false;
+  }
+
+  try {
+    const body: Record<string, unknown> = {
+      start: { dateTime: updates.startTime.toISOString(), timeZone: 'America/Los_Angeles' },
+      end: { dateTime: updates.endTime.toISOString(), timeZone: 'America/Los_Angeles' },
+    };
+    if (updates.summary !== undefined) body.summary = updates.summary;
+    if (updates.description !== undefined) body.description = updates.description;
+    if (updates.location !== undefined) body.location = updates.location;
+
+    const response = await fetch(
+      `${GOOGLE_CALENDAR_API}/calendars/primary/events/${eventId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      }
+    );
+
+    if (!response.ok) {
+      console.error('Failed to update calendar event:', await response.text());
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error updating Google Calendar event:', error);
+    return false;
+  }
+}
+
 // Note: generateGoogleCalendarUrl moved to lib/utils.ts for client-side usage
