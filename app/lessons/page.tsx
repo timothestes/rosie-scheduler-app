@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import LessonCard from '@/components/LessonCard';
 import CancelLessonModal from '@/components/CancelLessonModal';
+import RescheduleLessonModal from '@/components/RescheduleLessonModal';
 import { getLessonType } from '@/config/lessonTypes';
 import { formatDate } from '@/lib/utils';
 import type { Lesson } from '@/types';
@@ -19,6 +20,7 @@ export default function LessonsPage() {
   const [filter, setFilter] = useState<FilterType>('upcoming');
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [lessonToCancel, setLessonToCancel] = useState<Lesson | null>(null);
+  const [lessonToReschedule, setLessonToReschedule] = useState<Lesson | null>(null);
   const [isTodayVisible, setIsTodayVisible] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -61,6 +63,11 @@ export default function LessonsPage() {
       setLessonToCancel(lesson);
       setCancelModalOpen(true);
     }
+  };
+
+  const openRescheduleModal = (lessonId: string) => {
+    const lesson = lessons.find((l) => l.id === lessonId);
+    if (lesson) setLessonToReschedule(lesson);
   };
 
   const handleCancelLesson = async (cancelSeries?: boolean) => {
@@ -497,6 +504,7 @@ export default function LessonsPage() {
                               : undefined
                           }
                           onTogglePaid={isAdmin ? handleTogglePaid : undefined}
+                          onReschedule={isAdmin ? openRescheduleModal : undefined}
                           discountPercent={isAdmin ? (lesson.student?.discount_percent || 0) : discountPercent}
                         />
                       ))}
@@ -522,6 +530,7 @@ export default function LessonsPage() {
                   : undefined
               }
               onTogglePaid={isAdmin ? handleTogglePaid : undefined}
+              onReschedule={isAdmin ? openRescheduleModal : undefined}
               discountPercent={isAdmin ? (lesson.student?.discount_percent || 0) : discountPercent}
             />
           ))}
@@ -541,6 +550,18 @@ export default function LessonsPage() {
         isRecurring={lessonToCancel?.is_recurring || false}
         futureLessonsCount={getFutureLessonsCount()}
       />
+
+      {lessonToReschedule && (
+        <RescheduleLessonModal
+          isOpen={!!lessonToReschedule}
+          onClose={() => setLessonToReschedule(null)}
+          lesson={lessonToReschedule}
+          onSuccess={(updated) => {
+            setLessons((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+            setLessonToReschedule(null);
+          }}
+        />
+      )}
     </div>
   );
 }
