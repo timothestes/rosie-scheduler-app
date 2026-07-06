@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Modal from '@/components/Modal';
-import { getLessonType } from '@/config/lessonTypes';
+import { getLessonType, getLessonRate, formatRate, lessonTypes } from '@/config/lessonTypes';
 import type { Lesson } from '@/types';
 
 interface RescheduleLessonModalProps {
@@ -43,6 +43,7 @@ export default function RescheduleLessonModal({
 
   const [date, setDate] = useState(initialDate);
   const [time, setTime] = useState(initialTime);
+  const [lessonType, setLessonType] = useState(lesson.lesson_type);
   const [notify, setNotify] = useState(true);
   const [conflict, setConflict] = useState<ConflictInfo | null>(null);
   const [checking, setChecking] = useState(false);
@@ -54,6 +55,7 @@ export default function RescheduleLessonModal({
     if (isOpen) {
       setDate(initialDate);
       setTime(initialTime);
+      setLessonType(lesson.lesson_type);
       setNotify(true);
       setConflict(null);
       setError(null);
@@ -68,7 +70,7 @@ export default function RescheduleLessonModal({
     return d;
   };
 
-  const unchanged = date === initialDate && time === initialTime;
+  const unchanged = date === initialDate && time === initialTime && lessonType === lesson.lesson_type;
 
   // Debounced live conflict preview
   useEffect(() => {
@@ -81,7 +83,7 @@ export default function RescheduleLessonModal({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            lesson_type: lesson.lesson_type,
+            lesson_type: lessonType,
             location_type: lesson.location_type,
             start_time: buildStart().toISOString(),
             exclude_lesson_id: lesson.id,
@@ -101,7 +103,7 @@ export default function RescheduleLessonModal({
     }, 350);
     return () => { cancelled = true; clearTimeout(handle); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, time, isOpen]);
+  }, [date, time, lessonType, isOpen]);
 
   const hasConflict = conflict?.status === 'conflict';
   const conflictMsg = conflict?.reason === 'commute_buffer'
@@ -116,7 +118,7 @@ export default function RescheduleLessonModal({
       const res = await fetch(`/api/lessons/${lesson.id}/reschedule`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ start_time: buildStart().toISOString(), notify_student: notify }),
+        body: JSON.stringify({ start_time: buildStart().toISOString(), notify_student: notify, lesson_type: lessonType }),
       });
       if (res.ok) {
         onSuccess(await res.json());
@@ -138,6 +140,7 @@ export default function RescheduleLessonModal({
     hour: 'numeric', minute: '2-digit', hour12: true,
   });
   const showZoomNote = lesson.location_type === 'zoom' && !!lesson.zoom_join_url;
+  const priceChanged = getLessonRate(lessonType) !== getLessonRate(lesson.lesson_type);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Reschedule Lesson" size="md">
@@ -171,6 +174,45 @@ export default function RescheduleLessonModal({
               ))}
             </select>
           </div>
+        </div>
+
+        {/* Lesson type & length */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Lesson type &amp; length
+          </label>
+          <div className="space-y-2">
+            {lessonTypes.map(type => (
+              <label
+                key={type.id}
+                className={`flex items-center justify-between p-2.5 border rounded-lg cursor-pointer transition-colors ${
+                  lessonType === type.id
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30'
+                    : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="radio"
+                    name="rescheduleLessonType"
+                    value={type.id}
+                    checked={lessonType === type.id}
+                    onChange={() => setLessonType(type.id)}
+                    className="text-indigo-600"
+                  />
+                  <span className="text-sm text-gray-900 dark:text-white">{type.name}</span>
+                </div>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {formatRate(type.rate)}
+                </span>
+              </label>
+            ))}
+          </div>
+          {priceChanged && (
+            <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+              Price changes to {formatRate(getLessonRate(lessonType))} (was {formatRate(getLessonRate(lesson.lesson_type))}). Paid status is left unchanged.
+            </p>
+          )}
         </div>
 
         {/* Live conflict preview */}
