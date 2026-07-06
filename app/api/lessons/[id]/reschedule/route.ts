@@ -64,6 +64,8 @@ export async function PATCH(
   const duration = getLessonDuration(effectiveType);
   const newEnd = new Date(newStart.getTime() + duration * 60 * 1000);
   const oldStart = lesson.start_time;
+  const typeChanged = effectiveType !== lesson.lesson_type;
+  const newTypeName = getLessonType(effectiveType)?.name || effectiveType;
 
   // Re-check conflicts (advisory: log only, do not block — the client already
   // presented a conscious "Reschedule anyway" confirm). Excludes this lesson.
@@ -106,6 +108,7 @@ export async function PATCH(
       await updateZoomMeeting(lesson.admin_id, lesson.zoom_meeting_id, {
         start_time: newStart,
         duration,
+        ...(typeChanged ? { topic: `${newTypeName} - Rosie Scheduler` } : {}),
       });
     } catch (err) {
       console.error('Reschedule: Zoom update failed:', err);
@@ -115,9 +118,15 @@ export async function PATCH(
   // Google Calendar: PATCH the event's start/end
   if (lesson.google_calendar_event_id && lesson.admin_id) {
     try {
+      const gcalStudentName = lesson.student?.full_name || lesson.student?.email || 'Student';
+      const recurringLabel = lesson.recurring_frequency === 'weekly' ? 'Weekly' : lesson.recurring_frequency === 'biweekly' ? 'Bi-Weekly' : 'Monthly';
+      const gcalSummary = lesson.is_recurring
+        ? `${recurringLabel}: ${newTypeName} with ${gcalStudentName}`
+        : `${newTypeName} with ${gcalStudentName}`;
       await updateGoogleCalendarEvent(lesson.admin_id, lesson.google_calendar_event_id, {
         startTime: newStart,
         endTime: newEnd,
+        ...(typeChanged ? { summary: gcalSummary } : {}),
       });
     } catch (err) {
       console.error('Reschedule: Google Calendar update failed:', err);
@@ -133,7 +142,7 @@ export async function PATCH(
         studentName: lesson.student.full_name || lesson.student.email,
         oldStart,
         newStart: newStart.toISOString(),
-        lessonTypeName: lessonTypeInfo?.name || lesson.lesson_type,
+        lessonTypeName: lessonTypeInfo?.name || effectiveType,
         locationLabel: lesson.location_type === 'zoom' ? 'Zoom' : (lesson.location_address || 'In-Person'),
         zoomUrl: lesson.zoom_join_url,
       });
