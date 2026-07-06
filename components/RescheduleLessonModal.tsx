@@ -38,7 +38,8 @@ export default function RescheduleLessonModal({
   const start = new Date(lesson.start_time);
   const initialDate = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
   const initialTime = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
   const [date, setDate] = useState(initialDate);
   const [time, setTime] = useState(initialTime);

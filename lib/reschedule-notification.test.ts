@@ -22,7 +22,7 @@ const base = {
 };
 
 describe('buildRescheduleEmail', () => {
-  it('includes the student name in the subject', () => {
+  it('subject says the lesson was moved', () => {
     const { subject } = buildRescheduleEmail(base);
     expect(subject).toContain('moved');
   });
