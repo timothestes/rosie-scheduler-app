@@ -31,7 +31,7 @@ export async function PATCH(
   }
 
   const body = await request.json();
-  const { start_time, notify_student } = body as { start_time?: string; notify_student?: boolean };
+  const { start_time, notify_student, lesson_type } = body as { start_time?: string; notify_student?: boolean; lesson_type?: string };
 
   if (!start_time) {
     return NextResponse.json({ error: 'start_time is required' }, { status: 400 });
@@ -52,7 +52,16 @@ export async function PATCH(
     return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
   }
 
-  const duration = getLessonDuration(lesson.lesson_type);
+  // Resolve the (optionally changed) lesson type. Unknown id → 400.
+  let effectiveType: string = lesson.lesson_type;
+  if (lesson_type && lesson_type !== lesson.lesson_type) {
+    if (!getLessonType(lesson_type)) {
+      return NextResponse.json({ error: 'Unknown lesson type' }, { status: 400 });
+    }
+    effectiveType = lesson_type;
+  }
+
+  const duration = getLessonDuration(effectiveType);
   const newEnd = new Date(newStart.getTime() + duration * 60 * 1000);
   const oldStart = lesson.start_time;
 
@@ -78,6 +87,7 @@ export async function PATCH(
     .update({
       start_time: newStart.toISOString(),
       end_time: newEnd.toISOString(),
+      lesson_type: effectiveType,
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
@@ -117,7 +127,7 @@ export async function PATCH(
   // Notify the student (opt-in)
   if (notify_student && lesson.student?.email) {
     try {
-      const lessonTypeInfo = getLessonType(lesson.lesson_type);
+      const lessonTypeInfo = getLessonType(effectiveType);
       await sendRescheduleNotification({
         studentEmail: lesson.student.email,
         studentName: lesson.student.full_name || lesson.student.email,
