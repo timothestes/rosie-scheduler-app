@@ -7,6 +7,7 @@ import DayOverrideEditor from '@/components/DayOverrideEditor';
 import Modal from '@/components/Modal';
 import LessonCard from '@/components/LessonCard';
 import CancelLessonModal from '@/components/CancelLessonModal';
+import RescheduleLessonModal from '@/components/RescheduleLessonModal';
 import { formatDate, formatTime, dayNames, startOfMonth, endOfMonth, addMonths } from '@/lib/utils';
 import { getLessonType } from '@/config/lessonTypes';
 import type { Lesson, Availability, GoogleCalendarEvent, AvailabilityOverride } from '@/types';
@@ -33,6 +34,7 @@ export default function AdminCalendarPage() {
   const [showDayOverrideEditor, setShowDayOverrideEditor] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [lessonToCancel, setLessonToCancel] = useState<Lesson | null>(null);
+  const [lessonToReschedule, setLessonToReschedule] = useState<Lesson | null>(null);
   const [showCancelledLessons, setShowCancelledLessons] = useState(false);
   const [blockOutMode, setBlockOutMode] = useState(false);
   const [selectedBlockOutDates, setSelectedBlockOutDates] = useState<Set<string>>(new Set());
@@ -140,6 +142,11 @@ export default function AdminCalendarPage() {
       setLessonToCancel(lesson);
       setCancelModalOpen(true);
     }
+  };
+
+  const openRescheduleModal = (lessonId: string) => {
+    const lesson = lessons.find((l) => l.id === lessonId);
+    if (lesson) setLessonToReschedule(lesson);
   };
 
   const handleCancelLesson = async (cancelSeries?: boolean) => {
@@ -666,6 +673,7 @@ export default function AdminCalendarPage() {
                     showStudent
                     onTogglePaid={handleTogglePaid}
                     onCancel={openCancelModal}
+                    onReschedule={openRescheduleModal}
                     discountPercent={lesson.student?.discount_percent || 0}
                   />
                 ))}
@@ -726,6 +734,18 @@ export default function AdminCalendarPage() {
         isRecurring={lessonToCancel?.is_recurring || false}
         futureLessonsCount={getFutureLessonsCount()}
       />
+
+      {lessonToReschedule && (
+        <RescheduleLessonModal
+          isOpen={!!lessonToReschedule}
+          onClose={() => setLessonToReschedule(null)}
+          lesson={lessonToReschedule}
+          onSuccess={(updated) => {
+            setLessons((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+            setLessonToReschedule(null);
+          }}
+        />
+      )}
 
       {/* Day Override Editor Modal */}
       <Modal

@@ -11,6 +11,7 @@ interface LessonCardProps {
   onCancel?: (lessonId: string) => void;
   onTogglePaid?: (lessonId: string, isPaid: boolean) => void;
   onEdit?: (lessonId: string) => void;
+  onReschedule?: (lessonId: string) => void;
   showStudent?: boolean;
   discountPercent?: number; // Student's discount percentage (0-100)
 }
@@ -21,6 +22,7 @@ export default function LessonCard({
   onCancel,
   onTogglePaid,
   onEdit,
+  onReschedule,
   showStudent = false,
   discountPercent = 0,
 }: LessonCardProps) {
@@ -285,9 +287,10 @@ export default function LessonCard({
 
       {(() => {
         const showZoom = lesson.location_type === 'zoom' && !isCancelled && !isPast && !!lesson.zoom_join_url;
+        const showReschedule = isAdmin && !!onReschedule && !isCancelled && !isPast;
         const showEdit = isAdmin && !!onEdit && !isCancelled;
         const showCancel = !isCancelled && !isPast && !!onCancel;
-        if (!showZoom && !showEdit && !showCancel) return null;
+        if (!showZoom && !showReschedule && !showEdit && !showCancel) return null;
         return (
           <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
             {showZoom && (
@@ -299,6 +302,14 @@ export default function LessonCard({
               >
                 Join Zoom
               </a>
+            )}
+            {showReschedule && (
+              <button
+                onClick={() => onReschedule!(lesson.id)}
+                className="flex-1 py-1.5 text-sm text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+              >
+                Reschedule
+              </button>
             )}
             {showEdit && (
               <button

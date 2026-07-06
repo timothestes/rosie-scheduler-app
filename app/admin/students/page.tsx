@@ -8,6 +8,7 @@ import CancelLessonModal from '@/components/CancelLessonModal';
 import SendReminderModal from '@/components/SendReminderModal';
 import AdminScheduleLessonModal from '@/components/AdminScheduleLessonModal';
 import EditLessonModal from '@/components/EditLessonModal';
+import RescheduleLessonModal from '@/components/RescheduleLessonModal';
 import { formatDate } from '@/lib/utils';
 import { getLessonType } from '@/config/lessonTypes';
 import type { User, Lesson, StudentNote } from '@/types';
@@ -57,6 +58,9 @@ export default function AdminStudentsPage() {
 
   // Edit lesson state
   const [lessonToEdit, setLessonToEdit] = useState<Lesson | null>(null);
+
+  // Reschedule lesson state
+  const [lessonToReschedule, setLessonToReschedule] = useState<Lesson | null>(null);
 
   // Auth email state
   const [isSendingAuthEmail, setIsSendingAuthEmail] = useState<'setup' | 'reset' | null>(null);
@@ -476,6 +480,8 @@ export default function AdminStudentsPage() {
     setStudentLessons(prev => prev.map(l => l.id === updatedLesson.id ? updatedLesson : l));
     setLessonToEdit(null);
   };
+
+  const openRescheduleLesson = (lesson: Lesson) => setLessonToReschedule(lesson);
 
   const filteredStudents = students
     .filter(({ student }) => {
@@ -905,6 +911,7 @@ export default function AdminStudentsPage() {
                       onTogglePaid={handleTogglePaid}
                       onCancel={openCancelModal}
                       onEdit={openEditLesson}
+                      onReschedule={() => openRescheduleLesson(lesson)}
                       discountPercent={selectedStudent.discount_percent || 0}
                     />
                   ))
@@ -1174,6 +1181,18 @@ export default function AdminStudentsPage() {
           onClose={() => setLessonToEdit(null)}
           lesson={lessonToEdit}
           onSuccess={handleEditLessonSuccess}
+        />
+      )}
+
+      {lessonToReschedule && (
+        <RescheduleLessonModal
+          isOpen={!!lessonToReschedule}
+          onClose={() => setLessonToReschedule(null)}
+          lesson={lessonToReschedule}
+          onSuccess={(updated) => {
+            handleEditLessonSuccess(updated);
+            setLessonToReschedule(null);
+          }}
         />
       )}
     </div>
