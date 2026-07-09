@@ -153,11 +153,13 @@ export interface AuthUser {
 export type UserRole = 'admin' | 'student' | null;
 
 // Per-occurrence conflict status for recurring-booking preflight + partial booking.
+// 'unavailable' = the time falls on a blocked day or outside the teacher's
+// availability (as opposed to colliding with another booking).
 export interface OccurrenceStatus {
   date: string; // ISO datetime of the occurrence
   index: number; // 0-based position in the series
   status: 'available' | 'conflict';
-  reason: 'overlap' | 'commute_buffer' | null;
+  reason: 'overlap' | 'commute_buffer' | 'unavailable' | null;
   conflictIsOwnLesson: boolean;
 }
 

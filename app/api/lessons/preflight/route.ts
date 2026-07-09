@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getLessonDuration } from '@/config/lessonTypes';
 import { generateRecurringDates } from '@/lib/recurring-dates';
 import { checkOccurrenceConflicts } from '@/lib/conflicts';
+import { getPrimaryAdminUserId } from '@/lib/primary-admin';
 
 // POST /api/lessons/preflight - read-only availability check for a (possibly
 // recurring) booking. Returns per-occurrence conflict status. Advisory only:
@@ -38,11 +39,16 @@ export async function POST(request: NextRequest) {
     : [startDate];
 
   try {
+    // Mirror the booking path: enforce the teacher's availability + day-blocks for
+    // student previews so the preview matches what booking will actually do. Admin
+    // previews (e.g. reschedule) skip it, matching admin bookings.
+    const availabilityAdminId = admin ? null : await getPrimaryAdminUserId();
     const statuses = await checkOccurrenceConflicts(occurrences, {
       duration,
       locationType: location_type ?? 'zoom',
       bookingStudentId,
       excludeLessonId: admin ? exclude_lesson_id : undefined,
+      availabilityAdminId,
     });
     const availableCount = statuses.filter((s) => s.status === 'available').length;
     return NextResponse.json({ occurrences: statuses, availableCount, totalCount: statuses.length });

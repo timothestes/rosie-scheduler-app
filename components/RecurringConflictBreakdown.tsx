@@ -18,6 +18,7 @@ function formatOccurrence(dateIso: string): string {
 
 function statusLabel(o: OccurrenceStatus): string {
   if (o.status === 'available') return 'Available';
+  if (o.reason === 'unavailable') return 'Not available that day';
   if (o.reason === 'commute_buffer') return 'Too close to an in-person lesson (30-min travel buffer)';
   if (o.conflictIsOwnLesson) return 'You already have a lesson then';
   return 'Already booked';

@@ -175,11 +175,15 @@ export async function POST(request: NextRequest) {
     (Array.isArray(skip_dates) ? skip_dates : []).map((d: string) => new Date(d).toISOString())
   );
 
-  // Single source of truth: re-check conflicts at write time (shared with preflight)
+  // Single source of truth: re-check conflicts at write time (shared with preflight).
+  // For student bookings, also enforce the teacher's availability + day-blocks so a
+  // recurring series can't drop an occurrence onto a blocked day. Admin-placed
+  // bookings intentionally bypass this (the admin manages the schedule directly).
   const statuses = await checkOccurrenceConflicts(lessonDates, {
     duration,
     locationType: location_type,
     bookingStudentId,
+    availabilityAdminId: callerAdmin ? null : adminId,
   });
 
   // Partition occurrences into bookable vs skipped (conflict OR user-skipped)
