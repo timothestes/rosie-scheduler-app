@@ -31,6 +31,13 @@ export async function POST(request: NextRequest) {
     .single();
   const bookingStudentId = admin && student_id ? student_id : user.id;
 
+  if (is_recurring) {
+    const allowedMonths = admin ? [1, 3, 6] : [1, 3];
+    if (!allowedMonths.includes(Number(recurring_months))) {
+      return NextResponse.json({ error: 'Invalid recurring duration' }, { status: 400 });
+    }
+  }
+
   const duration = getLessonDuration(lesson_type);
   const startDate = new Date(start_time);
 

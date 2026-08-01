@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateConflict, maxAvailableDuration, type ExistingLesson } from './conflicts-core';
+import { evaluateConflict, maxAvailableDuration, overlapsBusyBlock, type ExistingLesson } from './conflicts-core';
 
 const BUF = 30 * 60 * 1000; // 30 min
 const occStart = new Date('2026-07-03T16:00:00.000Z');
@@ -126,5 +126,30 @@ describe('maxAvailableDuration', () => {
     const cancelled = lesson({ start_time: '2026-07-03T15:30:00.000Z', end_time: '2026-07-03T16:00:00.000Z', status: 'cancelled' });
     const past = lesson({ start_time: '2026-07-03T14:00:00.000Z', end_time: '2026-07-03T14:30:00.000Z' });
     expect(maxAvailableDuration(start, windowEnd, ME, [cancelled, past], BUF)).toBe(180);
+  });
+});
+
+describe('overlapsBusyBlock', () => {
+  const blocks = [
+    { start_time: '2026-08-03T21:00:00.000Z', end_time: '2026-08-03T22:00:00.000Z' },
+    // 2-day all-day trip
+    { start_time: '2026-08-10T07:00:00.000Z', end_time: '2026-08-12T07:00:00.000Z' },
+  ];
+  const ms = (iso: string) => new Date(iso).getTime();
+
+  it('flags an occurrence inside a block', () => {
+    expect(overlapsBusyBlock(ms('2026-08-03T21:15:00Z'), ms('2026-08-03T21:45:00Z'), blocks)).toBe(true);
+  });
+  it('flags an occurrence spanning a multi-day block', () => {
+    expect(overlapsBusyBlock(ms('2026-08-11T17:00:00Z'), ms('2026-08-11T18:00:00Z'), blocks)).toBe(true);
+  });
+  it('allows back-to-back (occurrence starts exactly when the block ends)', () => {
+    expect(overlapsBusyBlock(ms('2026-08-03T22:00:00Z'), ms('2026-08-03T23:00:00Z'), blocks)).toBe(false);
+  });
+  it('allows an occurrence ending exactly when the block starts', () => {
+    expect(overlapsBusyBlock(ms('2026-08-03T20:00:00Z'), ms('2026-08-03T21:00:00Z'), blocks)).toBe(false);
+  });
+  it('is false with no blocks', () => {
+    expect(overlapsBusyBlock(ms('2026-08-03T21:00:00Z'), ms('2026-08-03T22:00:00Z'), [])).toBe(false);
   });
 });

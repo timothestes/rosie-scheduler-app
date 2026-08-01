@@ -123,6 +123,17 @@ export async function POST(request: NextRequest) {
     .eq('email', user.email)
     .single();
 
+  // Bound the recurrence fan-out server-side. Students get the values the
+  // BookingForm offers; admins additionally get the 6-month option from
+  // AdminScheduleLessonModal. Also keeps occurrence arrays bounded and every
+  // student occurrence inside the busy-sync horizon (SYNC_WINDOW_DAYS).
+  if (is_recurring) {
+    const allowedMonths = callerAdmin ? [1, 3, 6] : [1, 3];
+    if (!allowedMonths.includes(Number(recurring_months))) {
+      return NextResponse.json({ error: 'Invalid recurring duration' }, { status: 400 });
+    }
+  }
+
   // Only enforce 24-hour advance booking for non-admin users
   const minBookingTime = new Date(Date.now() + 24 * 60 * 60 * 1000);
   if (!callerAdmin && startDate < minBookingTime) {

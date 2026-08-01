@@ -91,3 +91,23 @@ export function maxAvailableDuration(
 
   return Math.max(0, Math.round((maxEndMs - startMs) / 60000));
 }
+
+export interface BusyBlock {
+  start_time: string;
+  end_time: string;
+}
+
+// Imported Google-Calendar busy time. Strict inequalities: back-to-back with a
+// busy block is allowed, matching evaluateConflict's lesson-overlap semantics.
+// No commute buffer — busy blocks aren't lessons at a location.
+export function overlapsBusyBlock(
+  occStartMs: number,
+  occEndMs: number,
+  blocks: BusyBlock[]
+): boolean {
+  return blocks.some((b) => {
+    const bs = new Date(b.start_time).getTime();
+    const be = new Date(b.end_time).getTime();
+    return bs < occEndMs && be > occStartMs;
+  });
+}
