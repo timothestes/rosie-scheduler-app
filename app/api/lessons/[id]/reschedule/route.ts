@@ -5,6 +5,7 @@ import { updateZoomMeeting } from '@/lib/zoom';
 import { updateGoogleCalendarEvent } from '@/lib/google-calendar';
 import { checkOccurrenceConflicts } from '@/lib/conflicts';
 import { sendRescheduleNotification } from '@/lib/reschedule-notification';
+import { buildCalendarSummary } from '@/lib/lesson-calendar';
 
 // PATCH /api/lessons/[id]/reschedule - move a single lesson to a new time.
 // Admin-only. Side effects (Zoom, Calendar, email) are best-effort.
@@ -118,11 +119,12 @@ export async function PATCH(
   // Google Calendar: PATCH the event's start/end
   if (lesson.google_calendar_event_id && lesson.admin_id) {
     try {
-      const gcalStudentName = lesson.student?.full_name || lesson.student?.email || 'Student';
-      const recurringLabel = lesson.recurring_frequency === 'weekly' ? 'Weekly' : lesson.recurring_frequency === 'biweekly' ? 'Bi-Weekly' : 'Monthly';
-      const gcalSummary = lesson.is_recurring
-        ? `${recurringLabel}: ${newTypeName} with ${gcalStudentName}`
-        : `${newTypeName} with ${gcalStudentName}`;
+      const gcalSummary = buildCalendarSummary({
+        lessonTypeName: newTypeName,
+        studentName: lesson.student?.full_name || lesson.student?.email || 'Student',
+        isRecurring: lesson.is_recurring,
+        recurringFrequency: lesson.recurring_frequency,
+      });
       await updateGoogleCalendarEvent(lesson.admin_id, lesson.google_calendar_event_id, {
         startTime: newStart,
         endTime: newEnd,

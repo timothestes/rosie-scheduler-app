@@ -69,6 +69,22 @@ export default function EditLessonModal({
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
 
+  // Spell out what saving will do to Zoom and the calendar. Past lessons are
+  // left alone by the API, so promise nothing for them.
+  function integrationNote(): string | null {
+    if (startTime < new Date()) return null;
+
+    if (locationType !== lesson.location_type) {
+      return locationType === 'zoom'
+        ? 'a new Zoom meeting will be created and your calendar event updated.'
+        : `your calendar event will be updated${lesson.zoom_join_url ? ' and the existing Zoom meeting cancelled' : ''}.`;
+    }
+    return locationType === 'zoom' && lesson.zoom_join_url
+      ? 'the existing Zoom link will remain unchanged.'
+      : null;
+  }
+  const note = integrationNote();
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Edit Lesson" size="md">
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -116,9 +132,9 @@ export default function EditLessonModal({
               className="mt-2 w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
             />
           )}
-          {locationType === 'zoom' && lesson.zoom_join_url && (
+          {note && (
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Note: the existing Zoom link will remain unchanged.
+              Note: {note}
             </p>
           )}
         </div>
