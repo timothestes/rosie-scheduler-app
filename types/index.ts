@@ -115,6 +115,10 @@ export interface GoogleCalendarEvent {
     timeZone?: string;
   };
   status: string;
+  transparency?: 'opaque' | 'transparent';
+  eventType?: string;
+  attendees?: { self?: boolean; responseStatus?: string; email?: string }[];
+  extendedProperties?: { private?: Record<string, string>; shared?: Record<string, string> };
 }
 
 // UI types

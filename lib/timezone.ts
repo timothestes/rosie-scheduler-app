@@ -44,3 +44,25 @@ export function getBusinessTimeParts(
 
   return { dateStr, dayOfWeek, minutes: hour * 60 + minute };
 }
+
+// The UTC instant at which the given business-timezone calendar date begins
+// (local midnight). Needed for all-day Google events, which carry only a
+// 'YYYY-MM-DD' date. Never use `new Date('YYYY-MM-DD')` for this — that parses
+// as UTC midnight and shifts the day. Two correction passes make the result
+// stable across DST transitions.
+export function businessDateToUtc(dateStr: string, timeZone: string = BUSINESS_TIMEZONE): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const targetWallMs = Date.UTC(y, m - 1, d);
+  let ts = targetWallMs;
+  for (let i = 0; i < 2; i++) {
+    const parts = getBusinessTimeParts(new Date(ts), timeZone);
+    const wallMs =
+      Date.UTC(
+        Number(parts.dateStr.slice(0, 4)),
+        Number(parts.dateStr.slice(5, 7)) - 1,
+        Number(parts.dateStr.slice(8, 10))
+      ) + parts.minutes * 60000;
+    ts += targetWallMs - wallMs;
+  }
+  return new Date(ts);
+}
