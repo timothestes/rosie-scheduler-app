@@ -1,9 +1,22 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { fetchAllGoogleCalendarEvents } from './google-calendar';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+
+// from().select().eq().single() chain — resolves to whatever `single` is
+// mocked to return for that test. Only getGoogleTokensStrict touches
+// supabase in this file; fetchAllGoogleCalendarEvents talks to fetch only,
+// so mocking this module here has no effect on those tests.
+const single = vi.fn();
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: () => ({
+    from: () => ({ select: () => ({ eq: () => ({ single }) }) }),
+  }),
+}));
+
+import { fetchAllGoogleCalendarEvents, getGoogleTokensStrict } from './google-calendar';
 
 const page = (items: { id: string }[], nextPageToken?: string) =>
   new Response(JSON.stringify({ items, nextPageToken }), { status: 200 });
 
+beforeEach(() => single.mockReset());
 afterEach(() => vi.unstubAllGlobals());
 
 describe('fetchAllGoogleCalendarEvents', () => {
@@ -30,5 +43,27 @@ describe('fetchAllGoogleCalendarEvents', () => {
     // whole point is to keep paging past a single call.
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => page([{ id: 'x' }], 'again')));
     await expect(fetchAllGoogleCalendarEvents('token', new Date(), new Date())).rejects.toThrow(/pages/);
+  });
+});
+
+describe('getGoogleTokensStrict', () => {
+  it('returns null on a genuine zero-rows result (PGRST116)', async () => {
+    single.mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'no rows' } });
+    await expect(getGoogleTokensStrict('user-1')).resolves.toBeNull();
+  });
+
+  it('returns null when there is no error and no data', async () => {
+    single.mockResolvedValue({ data: null, error: null });
+    await expect(getGoogleTokensStrict('user-1')).resolves.toBeNull();
+  });
+
+  it('returns the row when the read succeeds', async () => {
+    single.mockResolvedValue({ data: { user_id: 'user-1', refresh_token: 'r' }, error: null });
+    await expect(getGoogleTokensStrict('user-1')).resolves.toEqual({ user_id: 'user-1', refresh_token: 'r' });
+  });
+
+  it('throws on any non-zero-rows error instead of returning null (transient failure must fail stale)', async () => {
+    single.mockResolvedValue({ data: null, error: { code: '500', message: 'connection reset' } });
+    await expect(getGoogleTokensStrict('user-1')).rejects.toThrow(/connection reset/);
   });
 });

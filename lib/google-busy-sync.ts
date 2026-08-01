@@ -5,7 +5,7 @@
 // connected) clears the mirror.
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPrimaryAdminUserId } from '@/lib/primary-admin';
-import { getGoogleTokens, getValidAccessToken, fetchAllGoogleCalendarEvents } from '@/lib/google-calendar';
+import { getGoogleTokensStrict, getValidAccessToken, fetchAllGoogleCalendarEvents } from '@/lib/google-calendar';
 import { shouldBlockEvent, eventToInterval, SYNC_WINDOW_DAYS, type BusyInterval } from '@/lib/google-busy-core';
 
 export interface SyncResult {
@@ -28,7 +28,9 @@ export async function syncGoogleBusyBlocks(): Promise<SyncResult> {
   };
 
   try {
-    const tokens = await getGoogleTokens(adminId);
+    // Strict read: throws on a transient DB error instead of returning null,
+    // so only a genuine "no row" (explicit disconnect) reaches the clear path.
+    const tokens = await getGoogleTokensStrict(adminId);
     if (!tokens) {
       const { error } = await admin.rpc('replace_google_busy_blocks', { p_admin_id: adminId, p_blocks: [] });
       if (error) throw new Error(`Clear on disconnect failed: ${error.message}`);
@@ -57,14 +59,19 @@ export async function syncGoogleBusyBlocks(): Promise<SyncResult> {
       .map(eventToInterval)
       .filter((b): b is BusyInterval => b !== null);
 
+    // Dedupe by google_event_id (last occurrence wins): an event updated
+    // mid-pagination can surface twice across pages, and the RPC's
+    // UNIQUE(admin_id, google_event_id) constraint would fail the whole run.
+    const deduped = Array.from(new Map(blocks.map((b) => [b.google_event_id, b])).values());
+
     const { error: rpcError } = await admin.rpc('replace_google_busy_blocks', {
       p_admin_id: adminId,
-      p_blocks: blocks,
+      p_blocks: deduped,
     });
     if (rpcError) throw new Error(`replace_google_busy_blocks failed: ${rpcError.message}`);
 
     await recordState({ last_success_at: new Date().toISOString(), last_error: null, stale_notified_at: null });
-    return { ok: true, blocks: blocks.length };
+    return { ok: true, blocks: deduped.length };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown sync error';
     console.error('Google busy sync failed:', message);

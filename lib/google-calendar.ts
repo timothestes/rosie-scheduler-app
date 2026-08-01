@@ -29,6 +29,32 @@ export async function getGoogleTokens(userId: string) {
   return tokens;
 }
 
+// Strict variant for the busy-sync orchestrator (spec §4.6): that code must
+// clear the mirror ONLY on an explicit disconnect (genuinely no token row),
+// never on a transient read error. supabase-js never throws here — a network
+// blip or PostgREST hiccup comes back as { data: null, error } just like a
+// real zero-rows result, and getGoogleTokens above discards `error`, so a
+// disconnect and a flaky DB read are indistinguishable to its callers. This
+// version keeps that distinction: null means "no row" (PGRST116, or no error
+// and no data), anything else throws so the sync fails stale instead of
+// wiping the mirror.
+export async function getGoogleTokensStrict(userId: string) {
+  const supabase = createAdminClient();
+
+  const { data: tokens, error } = await supabase
+    .from('google_tokens')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(`Failed to read google_tokens: ${error.message}`);
+  }
+
+  return tokens ?? null;
+}
+
 export async function refreshGoogleToken(userId: string, refreshToken: string): Promise<string | null> {
   try {
     const response = await fetch('https://oauth2.googleapis.com/token', {
