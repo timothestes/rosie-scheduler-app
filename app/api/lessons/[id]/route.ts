@@ -1,7 +1,14 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { deleteZoomMeeting } from '@/lib/zoom';
-import { deleteGoogleCalendarEvent } from '@/lib/google-calendar';
+import { createZoomMeeting, deleteZoomMeeting } from '@/lib/zoom';
+import { deleteGoogleCalendarEvent, updateGoogleCalendarEvent } from '@/lib/google-calendar';
+import { getLessonDuration, getLessonType } from '@/config/lessonTypes';
+import {
+  buildCalendarDescription,
+  buildCalendarLocation,
+  formatRecurringPosition,
+  planLessonEditSync,
+} from '@/lib/lesson-calendar';
 
 // GET /api/lessons/[id]
 export async function GET(
@@ -200,6 +207,39 @@ export async function PATCH(
     }
   }
 
+  // Keep Zoom in step with an edit that moves the lesson between Zoom and
+  // in-person. Cancellations are handled above; the planner also leaves past
+  // and already-cancelled lessons alone. Best-effort: never fail the response.
+  const syncPlan = planLessonEditSync(lesson, updates);
+
+  if (syncPlan.zoom === 'create' && lesson.admin_id) {
+    try {
+      const meeting = await createZoomMeeting(
+        lesson.admin_id,
+        `${getLessonType(lesson.lesson_type)?.name || 'Lesson'} - Rosie Scheduler`,
+        new Date(lesson.start_time),
+        getLessonDuration(lesson.lesson_type),
+        (updates.notes ?? lesson.notes) || undefined
+      );
+      if (meeting) {
+        updates.zoom_meeting_id = String(meeting.id);
+        updates.zoom_join_url = meeting.join_url;
+      }
+    } catch (err) {
+      console.error('Lesson edit: Zoom meeting creation failed:', err);
+    }
+  } else if (syncPlan.zoom === 'delete' && lesson.admin_id && lesson.zoom_meeting_id) {
+    try {
+      await deleteZoomMeeting(lesson.admin_id, lesson.zoom_meeting_id);
+    } catch (err) {
+      console.error('Lesson edit: Zoom meeting deletion failed:', err);
+    }
+    // The lesson is no longer virtual, so drop the link even if Zoom rejected
+    // the delete — nobody should be handed a meeting that isn't happening.
+    updates.zoom_meeting_id = null;
+    updates.zoom_join_url = null;
+  }
+
   const { data, error } = await supabase
     .from('lessons')
     .update(updates)
@@ -209,6 +249,47 @@ export async function PATCH(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Google Calendar: rewrite the saved event's location and description in
+  // place. Title is untouched — an edit changes neither type nor student.
+  if (syncPlan.calendar && lesson.admin_id && lesson.google_calendar_event_id) {
+    try {
+      let recurringPosition: string | null = null;
+      if (data.is_recurring && data.recurring_series_id) {
+        const { data: series } = await supabase
+          .from('lessons')
+          .select('start_time')
+          .eq('recurring_series_id', data.recurring_series_id);
+
+        if (series) {
+          recurringPosition = formatRecurringPosition(
+            series.map((l) => l.start_time),
+            data.start_time
+          );
+        }
+      }
+
+      const fields = {
+        lessonTypeName: getLessonType(data.lesson_type)?.name || 'Lesson',
+        studentName: data.student?.full_name || data.student?.email || 'Student',
+        locationType: data.location_type,
+        locationAddress: data.location_address,
+        notes: data.notes,
+        zoomJoinUrl: data.zoom_join_url,
+        isRecurring: data.is_recurring,
+        recurringPosition,
+      };
+
+      await updateGoogleCalendarEvent(lesson.admin_id, lesson.google_calendar_event_id, {
+        startTime: new Date(data.start_time),
+        endTime: new Date(data.end_time),
+        description: buildCalendarDescription(fields),
+        location: buildCalendarLocation(fields),
+      });
+    } catch (err) {
+      console.error('Lesson edit: Google Calendar update failed:', err);
+    }
   }
 
   return NextResponse.json(data);

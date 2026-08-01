@@ -8,6 +8,11 @@ import { resend, EMAIL_CONFIG } from '@/lib/resend';
 import { sendTeacherBookingNotification } from '@/lib/teacher-notification';
 import { generateRecurringDates } from '@/lib/recurring-dates';
 import { checkOccurrenceConflicts } from '@/lib/conflicts';
+import {
+  buildCalendarDescription,
+  buildCalendarLocation,
+  buildCalendarSummary,
+} from '@/lib/lesson-calendar';
 
 // GET /api/lessons - Get lessons
 export async function GET(request: NextRequest) {
@@ -284,22 +289,25 @@ export async function POST(request: NextRequest) {
     let googleCalendarEventId: string | null = null;
 
     if (adminId) {
-      const recurringLabel = recurring_frequency === 'weekly' ? 'Weekly' : recurring_frequency === 'biweekly' ? 'Bi-Weekly' : 'Monthly';
-      const eventTitle = is_recurring
-        ? `${recurringLabel}: ${lessonTypeInfo?.name || 'Lesson'} with ${studentName}`
-        : `${lessonTypeInfo?.name || 'Lesson'} with ${studentName}`;
-      
-      const locationDisplay = location_type === 'zoom' 
-        ? (zoomJoinUrl || 'Zoom')
-        : (location_address || 'In-Person');
-      
+      const calendarFields = {
+        lessonTypeName: lessonTypeInfo?.name || 'Lesson',
+        studentName,
+        locationType: location_type as 'zoom' | 'in-person',
+        locationAddress: location_address,
+        notes,
+        zoomJoinUrl,
+        isRecurring: is_recurring,
+        recurringFrequency: recurring_frequency,
+        recurringPosition: `${i + 1} of ${datesToBook.length}`,
+      };
+
       const calendarEvent = await createGoogleCalendarEvent(
         adminId,
-        eventTitle,
-        `Lesson Type: ${lessonTypeInfo?.name}\nStudent: ${studentName}${location_type === 'in-person' && location_address ? `\nAddress: ${location_address}` : ''}${notes ? `\nNotes: ${notes}` : ''}${zoomJoinUrl ? `\nZoom: ${zoomJoinUrl}` : ''}${is_recurring ? `\nRecurring: ${i + 1} of ${datesToBook.length}` : ''}`,
+        buildCalendarSummary(calendarFields),
+        buildCalendarDescription(calendarFields),
         lessonStart,
         lessonEnd,
-        locationDisplay
+        buildCalendarLocation(calendarFields)
       );
 
       if (calendarEvent) {
