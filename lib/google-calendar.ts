@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { BUSY_MARKER_KEY } from '@/lib/google-busy-core';
 import type { GoogleCalendarEvent } from '@/types';
 
 const GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
@@ -194,7 +195,7 @@ export async function createGoogleCalendarEvent(
       },
       // Echo guard: lets the busy-time import recognize app-created events even
       // before/without the lessons row (see lib/google-busy-core.ts).
-      extendedProperties: { private: { rosieApp: 'lesson' } },
+      extendedProperties: { private: { [BUSY_MARKER_KEY]: 'lesson' } },
       ...(location && { location }),
     };
 
