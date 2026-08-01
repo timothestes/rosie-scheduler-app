@@ -13,6 +13,7 @@ interface TimeSlotPickerProps {
   selectedLessonType?: string;
   selectedDate?: Date;
   disabled?: boolean;
+  busyBlocks?: { start_time: string; end_time: string }[];
 }
 
 export default function TimeSlotPicker({
@@ -23,6 +24,7 @@ export default function TimeSlotPicker({
   selectedLessonType,
   selectedDate,
   disabled = false,
+  busyBlocks = [],
 }: TimeSlotPickerProps) {
   // Default to 30 minutes (minimum lesson duration) to show all possible slots
   const lessonDuration = selectedLessonType 
@@ -73,6 +75,17 @@ export default function TimeSlotPicker({
     });
   };
 
+  // Imported Google-Calendar busy time. Plain strict-inequality overlap against
+  // the would-be lesson [start, start + duration) — no commute buffer.
+  const isBusyBlocked = (time: string): boolean => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const baseDate = selectedDate || (lessons.length > 0 ? new Date(lessons[0].start_time) : new Date());
+    const slotStart = new Date(baseDate);
+    slotStart.setHours(hours, minutes, 0, 0);
+    const slotEnd = new Date(slotStart.getTime() + lessonDuration * 60 * 1000);
+    return busyBlocks.some((b) => new Date(b.start_time) < slotEnd && new Date(b.end_time) > slotStart);
+  };
+
   // Check if the lesson duration fits within the availability window
   const fitsInWindow = (slot: TimeSlot): boolean => {
     if (!slot.windowEnd) return true; // If no window end specified, assume it fits
@@ -94,8 +107,9 @@ export default function TimeSlotPicker({
   const hasUnavailableSlots = slots.some((slot) => {
     const bookedLesson = isSlotBooked(slot.start);
     const hasOverlap = !bookedLesson && wouldOverlap(slot.start);
+    const busyBlocked = isBusyBlocked(slot.start);
     const doesntFit = !fitsInWindow(slot);
-    return bookedLesson || hasOverlap || doesntFit || !slot.isAvailable;
+    return bookedLesson || hasOverlap || busyBlocked || doesntFit || !slot.isAvailable;
   });
 
   return (
@@ -104,9 +118,10 @@ export default function TimeSlotPicker({
         {slots.map((slot) => {
           const bookedLesson = isSlotBooked(slot.start);
           const hasOverlap = !bookedLesson && wouldOverlap(slot.start);
+          const busyBlocked = isBusyBlocked(slot.start);
           const doesntFit = !fitsInWindow(slot);
           const isSelected = selectedSlot === slot.start;
-          const isUnavailable = !!bookedLesson || hasOverlap || doesntFit || !slot.isAvailable;
+          const isUnavailable = !!bookedLesson || hasOverlap || busyBlocked || doesntFit || !slot.isAvailable;
           const isDisabled = disabled || isUnavailable;
 
           return (
@@ -127,15 +142,17 @@ export default function TimeSlotPicker({
                   : ''}
               `}
               title={
-                bookedLesson 
-                  ? `Booked: ${bookedLesson.lesson_type}` 
-                  : hasOverlap 
+                bookedLesson
+                  ? `Booked: ${bookedLesson.lesson_type}`
+                  : hasOverlap
                     ? 'This time overlaps with an existing lesson'
-                    : doesntFit
-                      ? 'Selected lesson duration does not fit in this time slot'
-                      : !slot.isAvailable 
-                        ? 'Not available'
-                        : 'Click to select this time'
+                    : busyBlocked
+                      ? 'Not available'
+                      : doesntFit
+                        ? 'Selected lesson duration does not fit in this time slot'
+                        : !slot.isAvailable
+                          ? 'Not available'
+                          : 'Click to select this time'
               }
             >
               {formatTime24to12(slot.start)}

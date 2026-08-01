@@ -29,6 +29,7 @@ export default function SchedulePage() {
   const [discountPercent, setDiscountPercent] = useState(0);
   const [userAddress, setUserAddress] = useState('');
   const [isReturningStudent, setIsReturningStudent] = useState<boolean | null>(null);
+  const [busyBlocks, setBusyBlocks] = useState<{ start_time: string; end_time: string }[]>([]);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -38,18 +39,20 @@ export default function SchedulePage() {
     end.setMonth(end.getMonth() + 3);
 
     try {
-      const [lessonsRes, allLessonsRes, availabilityRes, overridesRes, profileRes] = await Promise.all([
+      const [lessonsRes, allLessonsRes, availabilityRes, overridesRes, profileRes, busyRes] = await Promise.all([
         fetch(`/api/lessons?startDate=${start.toISOString()}&endDate=${end.toISOString()}`),
         fetch(`/api/lessons?startDate=${start.toISOString()}&endDate=${end.toISOString()}&forScheduling=true`),
         fetch('/api/availability'),
         fetch(`/api/availability/overrides?startDate=${formatDate(start, 'iso')}&endDate=${formatDate(end, 'iso')}`),
         fetch('/api/profile'),
+        fetch(`/api/availability/busy?startDate=${start.toISOString()}&endDate=${end.toISOString()}`),
       ]);
 
       if (lessonsRes.ok) setLessons(await lessonsRes.json());
       if (allLessonsRes.ok) setAllLessonsForScheduling(await allLessonsRes.json());
       if (availabilityRes.ok) setAvailability(await availabilityRes.json());
       if (overridesRes.ok) setOverrides(await overridesRes.json());
+      if (busyRes.ok) setBusyBlocks(await busyRes.json());
       if (profileRes.ok) {
         const profile = await profileRes.json();
         setDiscountPercent(profile.discount_percent || 0);
@@ -266,6 +269,15 @@ export default function SchedulePage() {
     return lessonDate === selectedDateStr;
   });
 
+  // Busy blocks touching the selected day (interval overlap — a multi-day block
+  // straddling midnight must still gray out this day's slots).
+  const dayStart = new Date(selectedDate);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const dayBusyBlocks = busyBlocks.filter(
+    (b) => new Date(b.start_time) < dayEnd && new Date(b.end_time) > dayStart
+  );
+
   return (
     <div>
       {/* Floating Toast Notification */}
@@ -333,6 +345,7 @@ export default function SchedulePage() {
                 onSlotSelect={handleTimeSelect}
                 lessons={allDayLessons}
                 selectedDate={selectedDate}
+                busyBlocks={dayBusyBlocks}
               />
             </>
           )}
@@ -398,13 +411,24 @@ export default function SchedulePage() {
               // end, so an hour-long lesson can't be booked into a 30-min gap.
               // Booked slots hide student_id for privacy, so map is_own_lesson
               // to synthetic ids the shared helper can compare.
-              const existing = allDayLessons.map((l) => ({
-                start_time: l.start_time,
-                end_time: l.end_time,
-                location_type: l.location_type,
-                status: l.status,
-                student_id: (l as Lesson & { is_own_lesson?: boolean }).is_own_lesson ? 'me' : 'other',
-              }));
+              const existing = [
+                ...allDayLessons.map((l) => ({
+                  start_time: l.start_time,
+                  end_time: l.end_time,
+                  location_type: l.location_type,
+                  status: l.status,
+                  student_id: (l as Lesson & { is_own_lesson?: boolean }).is_own_lesson ? 'me' : 'other',
+                })),
+                // Imported busy blocks cap durations exactly like another
+                // student's zoom lesson: hard boundary, no commute buffer.
+                ...dayBusyBlocks.map((b) => ({
+                  start_time: b.start_time,
+                  end_time: b.end_time,
+                  location_type: 'zoom',
+                  status: 'scheduled',
+                  student_id: 'other',
+                })),
+              ];
               return maxAvailableDuration(start, windowEnd, 'me', existing, commuteConfig.bufferMinutes * 60 * 1000);
             })()}
             discountPercent={discountPercent}
