@@ -21,9 +21,10 @@ export async function syncGoogleBusyBlocks(): Promise<SyncResult> {
   if (!adminId) return { ok: false, blocks: 0, error: 'No primary admin configured' };
 
   const recordState = async (fields: Record<string, unknown>) => {
-    await admin
+    const { error } = await admin
       .from('google_sync_state')
       .upsert({ admin_id: adminId, last_attempt_at: new Date().toISOString(), ...fields }, { onConflict: 'admin_id' });
+    if (error) console.error('Failed to record sync state:', error.message ?? error);
   };
 
   try {
@@ -67,7 +68,14 @@ export async function syncGoogleBusyBlocks(): Promise<SyncResult> {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown sync error';
     console.error('Google busy sync failed:', message);
-    await recordState({ last_error: message });
+    // recordState itself hitting a DB error (e.g. Supabase down) must not turn
+    // a handled sync failure into an unhandled rejection — the contract is that
+    // this function always resolves with a SyncResult.
+    try {
+      await recordState({ last_error: message });
+    } catch (stateErr) {
+      console.error('Failed to record sync state:', stateErr);
+    }
     return { ok: false, blocks: 0, error: message };
   }
 }

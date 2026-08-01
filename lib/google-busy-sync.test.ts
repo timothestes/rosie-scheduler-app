@@ -61,6 +61,16 @@ describe('syncGoogleBusyBlocks', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  it('resolves (does not throw) when recording sync state also fails', async () => {
+    vi.mocked(getGoogleTokens).mockResolvedValue({ refresh_token: 'r' });
+    vi.mocked(getValidAccessToken).mockResolvedValue('tok');
+    vi.mocked(fetchAllGoogleCalendarEvents).mockRejectedValue(new Error('Google 500'));
+    upsert.mockRejectedValue(new Error('DB down'));
+    const result = await syncGoogleBusyBlocks();
+    expect(result).toMatchObject({ ok: false, blocks: 0, error: 'Google 500' });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it('clears the mirror on explicit disconnect (no token row)', async () => {
     vi.mocked(getGoogleTokens).mockResolvedValue(null);
     const result = await syncGoogleBusyBlocks();
