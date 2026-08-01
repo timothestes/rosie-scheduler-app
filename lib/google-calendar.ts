@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { BUSY_MARKER_KEY } from '@/lib/google-busy-core';
 import type { GoogleCalendarEvent } from '@/types';
 
 const GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
@@ -11,8 +12,13 @@ interface TokenResponse {
   token_type: string;
 }
 
+// Service-role client on purpose: token reads/writes must work (a) in the
+// session-less sync cron and (b) when a STUDENT books a lesson — the event is
+// created on the TEACHER's calendar, and under the student's RLS session this
+// read silently returned nothing, so student bookings never reached Google.
+// The module is server-only and every route calling into it is auth-gated.
 export async function getGoogleTokens(userId: string) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   
   const { data: tokens } = await supabase
     .from('google_tokens')
@@ -21,6 +27,32 @@ export async function getGoogleTokens(userId: string) {
     .single();
   
   return tokens;
+}
+
+// Strict variant for the busy-sync orchestrator (spec §4.6): that code must
+// clear the mirror ONLY on an explicit disconnect (genuinely no token row),
+// never on a transient read error. supabase-js never throws here — a network
+// blip or PostgREST hiccup comes back as { data: null, error } just like a
+// real zero-rows result, and getGoogleTokens above discards `error`, so a
+// disconnect and a flaky DB read are indistinguishable to its callers. This
+// version keeps that distinction: null means "no row" (PGRST116, or no error
+// and no data), anything else throws so the sync fails stale instead of
+// wiping the mirror.
+export async function getGoogleTokensStrict(userId: string) {
+  const supabase = createAdminClient();
+
+  const { data: tokens, error } = await supabase
+    .from('google_tokens')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(`Failed to read google_tokens: ${error.message}`);
+  }
+
+  return tokens ?? null;
 }
 
 export async function refreshGoogleToken(userId: string, refreshToken: string): Promise<string | null> {
@@ -44,8 +76,8 @@ export async function refreshGoogleToken(userId: string, refreshToken: string): 
     }
 
     const data: TokenResponse = await response.json();
-    
-    const supabase = await createClient();
+
+    const supabase = createAdminClient();
     const expiresAt = new Date(Date.now() + data.expires_in * 1000).toISOString();
     
     await supabase
@@ -122,6 +154,43 @@ export async function fetchGoogleCalendarEvents(
   }
 }
 
+// Paginated events.list for the busy-time import. Unlike fetchGoogleCalendarEvents
+// (display overlay, fails soft to []), this THROWS on any failure: the sync's
+// whole-table replace would otherwise mistake a transient error for an empty
+// calendar and wipe the mirror. Caller supplies the access token so the sync can
+// distinguish "no tokens" (disconnect) from "refresh failed" (fail stale) first.
+export async function fetchAllGoogleCalendarEvents(
+  accessToken: string,
+  timeMin: Date,
+  timeMax: Date
+): Promise<GoogleCalendarEvent[]> {
+  const events: GoogleCalendarEvent[] = [];
+  let pageToken: string | undefined;
+
+  for (let pageCount = 0; pageCount < 10; pageCount++) {
+    const params = new URLSearchParams({
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: 'true',
+      maxResults: '2500',
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+
+    const response = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) {
+      throw new Error(`Google Calendar list failed (${response.status}): ${await response.text()}`);
+    }
+    const data = await response.json();
+    events.push(...(data.items || []));
+    pageToken = data.nextPageToken;
+    if (!pageToken) return events;
+  }
+
+  throw new Error('Google Calendar list exceeded 10 pages; aborting to avoid a partial sync');
+}
+
 // Create a Google Calendar event
 export async function createGoogleCalendarEvent(
   adminUserId: string,
@@ -150,6 +219,9 @@ export async function createGoogleCalendarEvent(
         dateTime: endTime.toISOString(),
         timeZone: 'America/Los_Angeles',
       },
+      // Echo guard: lets the busy-time import recognize app-created events even
+      // before/without the lessons row (see lib/google-busy-core.ts).
+      extendedProperties: { private: { [BUSY_MARKER_KEY]: 'lesson' } },
       ...(location && { location }),
     };
 

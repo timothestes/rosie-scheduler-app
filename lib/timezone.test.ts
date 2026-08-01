@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getBusinessTimeParts } from './timezone';
+import { getBusinessTimeParts, businessDateToUtc } from './timezone';
 
 // The app treats all wall-clock times as America/Los_Angeles (see the hardcoded
 // timeZone in emails, Google Calendar, Zoom). The server runs in UTC, so it must
@@ -31,5 +31,20 @@ describe('getBusinessTimeParts', () => {
       dayOfWeek: 3, // Wednesday
       minutes: 18 * 60,
     });
+  });
+});
+
+describe('businessDateToUtc', () => {
+  it('converts a PST date to LA midnight (UTC-8)', () => {
+    expect(businessDateToUtc('2026-01-15').toISOString()).toBe('2026-01-15T08:00:00.000Z');
+  });
+  it('converts a PDT date to LA midnight (UTC-7)', () => {
+    expect(businessDateToUtc('2026-07-15').toISOString()).toBe('2026-07-15T07:00:00.000Z');
+  });
+  it('handles the spring-forward day (Mar 8 2026 starts in PST)', () => {
+    expect(businessDateToUtc('2026-03-08').toISOString()).toBe('2026-03-08T08:00:00.000Z');
+  });
+  it('handles the fall-back day (Nov 1 2026 starts in PDT)', () => {
+    expect(businessDateToUtc('2026-11-01').toISOString()).toBe('2026-11-01T07:00:00.000Z');
   });
 });

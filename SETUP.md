@@ -18,11 +18,13 @@ This document contains all manual setup steps required before running the applic
 2. Click **Edit App**
 3. Under **Scopes**, click **Add or Remove Scopes**
 4. Add the following scopes:
-   - `https://www.googleapis.com/auth/calendar.readonly` (View your calendars)
+   - `https://www.googleapis.com/auth/calendar` (See, edit, share, and permanently delete calendars)
    - `email` (already added)
    - `profile` (already added)
    - `openid` (already added)
 5. Click **Update** and **Save and Continue**
+
+Events the app creates (lessons) are tagged so they're excluded from the busy-time import, and the teacher's Google Calendar Busy events are imported as blocked booking time every 15 minutes.
 
 ### 3. Update OAuth Client Redirect URIs
 
@@ -172,7 +174,7 @@ ALTER TABLE lessons ADD COLUMN IF NOT EXISTS zoom_join_url TEXT;
 ## Verification Checklist
 
 - [ ] Google Calendar API enabled in Google Cloud Console
-- [ ] OAuth scopes updated (calendar.readonly)
+- [ ] OAuth scopes updated (calendar — read/write)
 - [ ] All Supabase tables created
 - [ ] RLS policies enabled
 - [ ] Triggers set up

@@ -39,6 +39,8 @@ export default function AdminCalendarPage() {
   const [blockOutMode, setBlockOutMode] = useState(false);
   const [selectedBlockOutDates, setSelectedBlockOutDates] = useState<Set<string>>(new Set());
   const [cancelLessonsOnBlockOut, setCancelLessonsOnBlockOut] = useState(false);
+  const [syncState, setSyncState] = useState<{ last_success_at: string | null; last_error: string | null } | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -46,11 +48,12 @@ export default function AdminCalendarPage() {
     const end = endOfMonth(addMonths(selectedDate, 1));
 
     try {
-      const [lessonsRes, availabilityRes, overridesRes, eventsRes] = await Promise.all([
+      const [lessonsRes, availabilityRes, overridesRes, eventsRes, syncRes] = await Promise.all([
         fetch(`/api/lessons?startDate=${start.toISOString()}&endDate=${end.toISOString()}`),
         fetch('/api/availability'),
         fetch(`/api/availability/overrides?startDate=${formatDate(start, 'iso')}&endDate=${formatDate(end, 'iso')}`),
         fetch(`/api/calendar/events?startDate=${start.toISOString()}&endDate=${end.toISOString()}`),
+        fetch('/api/busy-blocks/sync'),
       ]);
 
       if (lessonsRes.ok) {
@@ -71,6 +74,9 @@ export default function AdminCalendarPage() {
         // No Google Calendar connected
         setGoogleCalendarConnected(false);
       }
+      if (syncRes.ok) {
+        setSyncState(await syncRes.json());
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
       setGoogleCalendarConnected(false);
@@ -86,6 +92,19 @@ export default function AdminCalendarPage() {
   const handleConnectGoogleCalendar = () => {
     // Redirect to re-auth with calendar scope
     window.location.href = '/api/auth/google-calendar';
+  };
+
+  const handleSyncNow = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch('/api/busy-blocks/sync', { method: 'POST' });
+      if (res.ok) {
+        const stateRes = await fetch('/api/busy-blocks/sync');
+        if (stateRes.ok) setSyncState(await stateRes.json());
+      }
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleSaveAvailability = async (newAvailability: Partial<Availability>[]) => {
@@ -412,6 +431,11 @@ export default function AdminCalendarPage() {
   const dayOverride = overrides.find((o) => o.override_date === dateStr);
   const dayAvailability = availability.filter((a) => a.day_of_week === dayOfWeek && a.is_recurring);
 
+  const syncIsStale =
+    googleCalendarConnected === true &&
+    (!syncState?.last_success_at ||
+      Date.now() - new Date(syncState.last_success_at).getTime() > 60 * 60 * 1000);
+
   return (
     <div className="px-2 sm:px-0">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
@@ -429,6 +453,15 @@ export default function AdminCalendarPage() {
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
               Connect Google Calendar
+            </button>
+          )}
+          {googleCalendarConnected === true && (
+            <button
+              onClick={handleSyncNow}
+              disabled={isSyncing}
+              className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSyncing ? 'Syncing…' : 'Sync now'}
             </button>
           )}
           <button
@@ -456,6 +489,18 @@ export default function AdminCalendarPage() {
           <p className="text-blue-800 dark:text-blue-200 text-sm">
             <strong>Tip:</strong> Connect your Google Calendar to see your personal events overlaid on the schedule. This helps avoid double-booking.
           </p>
+        </div>
+      )}
+
+      {/* Sync Staleness Banner */}
+      {syncIsStale && (
+        <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg">
+          <p className="text-amber-800 dark:text-amber-200 text-sm">
+            ⚠️ Google Calendar sync hasn&apos;t succeeded in the last hour — new events on your calendar may not be blocking student bookings.
+          </p>
+          {syncState?.last_error && (
+            <p className="text-amber-700 dark:text-amber-300 text-xs mt-1">{syncState.last_error}</p>
+          )}
         </div>
       )}
 
