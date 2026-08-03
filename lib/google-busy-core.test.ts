@@ -10,6 +10,16 @@ const timed = (over: Partial<GoogleCalendarEvent> = {}): GoogleCalendarEvent => 
   status: 'confirmed',
   ...over,
 });
+// Date-only (all-day) event. Google omits `transparency` for Busy events, so
+// this helper is an all-day event explicitly showing as Busy.
+const allDay = (over: Partial<GoogleCalendarEvent> = {}): GoogleCalendarEvent => ({
+  id: 'evt-allday',
+  summary: 'Laundry',
+  start: { date: '2026-08-05' },
+  end: { date: '2026-08-06' },
+  status: 'confirmed',
+  ...over,
+});
 const none = new Set<string>();
 
 describe('shouldBlockEvent', () => {
@@ -40,6 +50,26 @@ describe('shouldBlockEvent', () => {
   });
   it('does not block an event whose id is a known lesson event (historical)', () => {
     expect(shouldBlockEvent(timed(), new Set(['evt1']))).toBe(false);
+  });
+
+  // All-day events never block. Rosie's calendar is full of single-day all-day
+  // items ("Laundry", "Cooking Day", "Joe's Birthday") that Google reports as
+  // Busy; honouring them closed ~48% of her teaching weekdays. Whole-day
+  // unavailability is expressed with in-app day-blocks (availability_overrides),
+  // which she already uses, so Google all-day events carry no booking meaning.
+  it('does not block an all-day event even when marked Busy', () => {
+    expect(shouldBlockEvent(allDay(), none)).toBe(false);
+  });
+  it('does not block an all-day event that is explicitly Free', () => {
+    expect(shouldBlockEvent(allDay({ transparency: 'transparent' }), none)).toBe(false);
+  });
+  // Consequence of the rule above: nothing on Google blocks a whole day anymore.
+  it('does not block an all-day out-of-office event', () => {
+    expect(shouldBlockEvent(allDay({ eventType: 'outOfOffice' }), none)).toBe(false);
+  });
+  // The rule is scoped to all-day events only — timed events are unaffected.
+  it('still blocks a timed out-of-office event', () => {
+    expect(shouldBlockEvent(timed({ eventType: 'outOfOffice' }), none)).toBe(true);
   });
 });
 

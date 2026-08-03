@@ -21,15 +21,26 @@ export interface BusyInterval {
   is_all_day: boolean;
 }
 
-// Busy predicate per spec §4.3. Google omits `transparency` for Busy (opaque)
-// events; all-day events default to 'transparent', which automatically gives
-// "all-day blocks only if marked Busy". outOfOffice/focusTime are opaque and
-// correctly block via the transparency rule.
+// Busy predicate per spec §4.3, amended by
+// docs/superpowers/specs/2026-08-02-all-day-events-do-not-block-design.md.
+// Google omits `transparency` for Busy (opaque) events. Timed outOfOffice/
+// focusTime are opaque and correctly block via the transparency rule.
+//
+// All-day events NEVER block, whatever their Busy/Free setting. In practice a
+// teacher's all-day events are day labels ("Laundry", "Cooking Day", a
+// birthday), not unavailability, and Google reports many of them as Busy —
+// honouring them closed ~48% of Rosie's teaching weekdays. Whole-day
+// unavailability is expressed with in-app day-blocks (availability_overrides).
+// Consequence: nothing on Google blocks a whole day; an all-day out-of-office
+// event does not block either.
 export function shouldBlockEvent(
   event: GoogleCalendarEvent,
   lessonEventIds: Set<string>
 ): boolean {
   if (event.status === 'cancelled') return false;
+  // Date-only start == all-day. Checked before transparency: all-day events
+  // are dropped regardless of whether Google marks them Busy or Free.
+  if (event.start.date && !event.start.dateTime) return false;
   if (event.transparency === 'transparent') return false;
   if (event.eventType === 'workingLocation' || event.eventType === 'birthday') return false;
   const self = event.attendees?.find((a) => a.self);
