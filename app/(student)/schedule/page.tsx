@@ -9,6 +9,7 @@ import CancelLessonModal from '@/components/CancelLessonModal';
 import Modal from '@/components/Modal';
 import { formatDate, formatTime24to12, parseTimeToDate } from '@/lib/utils';
 import { maxAvailableDuration } from '@/lib/conflicts-core';
+import { blockedReasonForDate } from '@/lib/availability-core';
 import { commuteConfig } from '@/config/commute';
 import type { Lesson, Availability, AvailabilityOverride, TimeSlot } from '@/types';
 
@@ -253,6 +254,7 @@ export default function SchedulePage() {
   const selectedDateStr = formatDate(selectedDate, 'iso');
   const isPastDate = new Date(selectedDateStr) < new Date(formatDate(new Date(), 'iso'));
   const timeSlots = getTimeSlotsForDate(selectedDate);
+  const blockedReason = blockedReasonForDate(selectedDateStr, overrides);
   
   // Filter out cancelled lessons
   const activeLessons = lessons.filter((l) => l.status !== 'cancelled');
@@ -329,7 +331,9 @@ export default function SchedulePage() {
             <p className="text-gray-500 dark:text-gray-400">Cannot book lessons in the past</p>
           ) : timeSlots.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-gray-500 dark:text-gray-400">No available times on this day</p>
+              <p className="text-gray-500 dark:text-gray-400">
+                {blockedReason ? <>Date not available &mdash; {blockedReason}</> : 'No available times on this day'}
+              </p>
               <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
                 Please select another date with availability
               </p>

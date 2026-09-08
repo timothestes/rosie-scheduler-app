@@ -14,6 +14,9 @@ interface TimeSlotPickerProps {
   selectedDate?: Date;
   disabled?: boolean;
   busyBlocks?: { start_time: string; end_time: string }[];
+  // The teacher's reason for blocking this day, if she gave one. Only relevant
+  // when `slots` is empty because the whole day is blocked.
+  blockedReason?: string | null;
 }
 
 export default function TimeSlotPicker({
@@ -25,6 +28,7 @@ export default function TimeSlotPicker({
   selectedDate,
   disabled = false,
   busyBlocks = [],
+  blockedReason,
 }: TimeSlotPickerProps) {
   // Default to 30 minutes (minimum lesson duration) to show all possible slots
   const lessonDuration = selectedLessonType 
@@ -99,7 +103,11 @@ export default function TimeSlotPicker({
   if (slots.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-        No available time slots for this day
+        {blockedReason ? (
+          <>Date not available &mdash; {blockedReason}</>
+        ) : (
+          'No available time slots for this day'
+        )}
       </div>
     );
   }

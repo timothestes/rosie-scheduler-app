@@ -9,6 +9,7 @@ import {
   formatRecurringPosition,
   planLessonEditSync,
 } from '@/lib/lesson-calendar';
+import { sendCancellationNotification } from '@/lib/cancellation-notification';
 
 // GET /api/lessons/[id]
 export async function GET(
@@ -249,6 +250,25 @@ export async function PATCH(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Notify the student when this specific cancellation was explicitly flagged
+  // for it (currently: the admin "Block Out Days -> also cancel these lessons"
+  // flow). Opt-in per request so every other caller of this route — the
+  // regular cancel-lesson modal, students cancelling their own lesson — keeps
+  // its existing silent behavior. Best-effort: never fail the response.
+  if (body.status === 'cancelled' && body.notify_cancellation === true && data.student?.email) {
+    try {
+      await sendCancellationNotification({
+        studentEmail: data.student.email,
+        studentName: data.student.full_name || data.student.email,
+        start: data.start_time,
+        lessonTypeName: getLessonType(data.lesson_type)?.name || 'Lesson',
+        reason: data.cancellation_reason,
+      });
+    } catch (err) {
+      console.error('Lesson cancel: notification failed:', err);
+    }
   }
 
   // Google Calendar: rewrite the saved event's location and description in

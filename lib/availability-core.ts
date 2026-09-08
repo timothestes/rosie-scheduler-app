@@ -17,6 +17,7 @@ export interface DayOverride {
   is_available: boolean;
   start_time: string | null;
   end_time: string | null;
+  reason?: string | null; // Optional note shown to students when is_available is false
 }
 
 export interface Window {
@@ -51,6 +52,16 @@ export function availabilityWindowsForDate(
   return availability
     .filter((a) => a.is_recurring && a.day_of_week === dayOfWeek)
     .map((a) => ({ start: timeToMinutes(a.start_time), end: timeToMinutes(a.end_time) }));
+}
+
+// The teacher's reason for blocking this date, when one was given. Null for an
+// unblocked date, a date with no override, or a blocked override left blank.
+// Never derived from Google Calendar — only admin-authored day-blocks carry one.
+export function blockedReasonForDate(localDateStr: string, overrides: DayOverride[]): string | null {
+  const override = overrides.find((o) => o.override_date === localDateStr);
+  if (!override || override.is_available) return null;
+  const reason = override.reason?.trim();
+  return reason ? reason : null;
 }
 
 // True when the lesson [startMinutes, endMinutes] fits entirely within one of the
