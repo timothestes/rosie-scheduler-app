@@ -61,7 +61,10 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { override_date, is_available, start_time, end_time } = body;
+  const { override_date, is_available, start_time, end_time, reason } = body;
+  // A reason only ever means something on a blocked day; drop it otherwise
+  // rather than trusting the client to have already cleared it.
+  const storedReason = is_available ? null : (reason || null);
 
   // Upsert override (replace if exists for same date)
   const { data: existing } = await supabase
@@ -75,7 +78,7 @@ export async function POST(request: NextRequest) {
   if (existing) {
     result = await supabase
       .from('availability_overrides')
-      .update({ is_available, start_time, end_time })
+      .update({ is_available, start_time, end_time, reason: storedReason })
       .eq('id', existing.id)
       .select()
       .single();
@@ -88,6 +91,7 @@ export async function POST(request: NextRequest) {
         is_available,
         start_time,
         end_time,
+        reason: storedReason,
       })
       .select()
       .single();

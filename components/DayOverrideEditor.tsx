@@ -9,9 +9,10 @@ interface DayOverrideEditorProps {
     is_available: boolean;
     start_time: string | null;
     end_time: string | null;
+    reason?: string | null;
   } | null;
   weeklyAvailability?: { start_time: string; end_time: string }[];
-  onSave: (data: { is_available: boolean; start_time?: string; end_time?: string }) => Promise<void>;
+  onSave: (data: { is_available: boolean; start_time?: string; end_time?: string; reason?: string | null }) => Promise<void>;
   onReset?: () => Promise<void>;
   onCancel: () => void;
 }
@@ -33,6 +34,7 @@ export default function DayOverrideEditor({
   const [endTime, setEndTime] = useState(
     currentOverride?.end_time?.substring(0, 5) || '17:00'
   );
+  const [reason, setReason] = useState(currentOverride?.reason || '');
   const [saving, setSaving] = useState(false);
 
   const generateTimeOptions = () => {
@@ -55,6 +57,7 @@ export default function DayOverrideEditor({
       is_available: mode === 'available',
       start_time: mode === 'available' ? startTime + ':00' : undefined,
       end_time: mode === 'available' ? endTime + ':00' : undefined,
+      reason: mode === 'blocked' ? reason.trim() || null : null,
     });
     setSaving(false);
   };
@@ -138,6 +141,24 @@ export default function DayOverrideEditor({
           </div>
         </button>
       </div>
+
+      {/* Reason (only when blocking the day) */}
+      {mode === 'blocked' && (
+        <div>
+          <label htmlFor="block-reason" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+            Reason <span className="font-normal text-gray-400 dark:text-gray-500">(optional, shown to students)</span>
+          </label>
+          <input
+            id="block-reason"
+            type="text"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. Christmas break"
+            maxLength={100}
+            className="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm focus:ring-indigo-500 focus:border-indigo-500"
+          />
+        </div>
+      )}
 
       {/* Time Selection (only when available) */}
       {mode === 'available' && (

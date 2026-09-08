@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   isWithinAvailability,
   availabilityWindowsForDate,
+  blockedReasonForDate,
   type AvailabilityWindow,
   type DayOverride,
 } from './availability-core';
@@ -79,6 +80,40 @@ describe('isWithinAvailability', () => {
       { override_date: '2026-08-13', is_available: false, start_time: null, end_time: null },
     ];
     expect(isWithinAvailability('2026-08-13', 4, THREE_PM, FOUR_PM, weekly, overrides)).toBe(false);
+  });
+});
+
+describe('blockedReasonForDate', () => {
+  it('returns the reason for a blocked day that has one', () => {
+    const overrides: DayOverride[] = [
+      { override_date: '2026-12-25', is_available: false, start_time: null, end_time: null, reason: 'Christmas' },
+    ];
+    expect(blockedReasonForDate('2026-12-25', overrides)).toBe('Christmas');
+  });
+
+  it('returns null for a blocked day with no reason given', () => {
+    const overrides: DayOverride[] = [
+      { override_date: '2026-12-25', is_available: false, start_time: null, end_time: null },
+    ];
+    expect(blockedReasonForDate('2026-12-25', overrides)).toBeNull();
+  });
+
+  it('returns null for a blank/whitespace-only reason', () => {
+    const overrides: DayOverride[] = [
+      { override_date: '2026-12-25', is_available: false, start_time: null, end_time: null, reason: '   ' },
+    ];
+    expect(blockedReasonForDate('2026-12-25', overrides)).toBeNull();
+  });
+
+  it('returns null when the day is not blocked (an "available" override with a stray reason)', () => {
+    const overrides: DayOverride[] = [
+      { override_date: '2026-12-25', is_available: true, start_time: '09:00:00', end_time: '12:00:00', reason: 'ignored' },
+    ];
+    expect(blockedReasonForDate('2026-12-25', overrides)).toBeNull();
+  });
+
+  it('returns null when there is no override for the date at all', () => {
+    expect(blockedReasonForDate('2026-12-25', [])).toBeNull();
   });
 });
 

@@ -47,6 +47,7 @@ export interface AvailabilityOverride {
   is_available: boolean;
   start_time: string | null;
   end_time: string | null;
+  reason: string | null; // Optional note shown to students when is_available is false
   created_at: string;
 }
 
@@ -165,6 +166,9 @@ export interface OccurrenceStatus {
   status: 'available' | 'conflict';
   reason: 'overlap' | 'commute_buffer' | 'unavailable' | null;
   conflictIsOwnLesson: boolean;
+  // Set only when reason === 'unavailable' and the teacher gave a reason for
+  // the day-block (e.g. "Wedding"). Null/undefined -> generic messaging.
+  blockReason?: string | null;
 }
 
 export interface PreflightResponse {

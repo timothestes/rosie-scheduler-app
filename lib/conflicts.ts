@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { commuteConfig } from '@/config/commute';
 import { evaluateConflict, overlapsBusyBlock, type ExistingLesson, type BusyBlock } from '@/lib/conflicts-core';
-import { isWithinAvailability, type AvailabilityWindow, type DayOverride } from '@/lib/availability-core';
+import { isWithinAvailability, blockedReasonForDate, type AvailabilityWindow, type DayOverride } from '@/lib/availability-core';
 import { getBusinessTimeParts } from '@/lib/timezone';
 import { SYNC_WINDOW_DAYS } from '@/lib/google-busy-core';
 import type { OccurrenceStatus } from '@/types';
@@ -64,7 +64,7 @@ export async function checkOccurrenceConflicts(
         .eq('admin_id', availabilityAdminId),
       admin
         .from('availability_overrides')
-        .select('override_date, is_available, start_time, end_time')
+        .select('override_date, is_available, start_time, end_time, reason')
         .eq('admin_id', availabilityAdminId)
         .gte('override_date', minDate)
         .lte('override_date', maxDate),
@@ -94,7 +94,14 @@ export async function checkOccurrenceConflicts(
     if (availabilityAdminId) {
       const { dateStr, dayOfWeek, minutes } = getBusinessTimeParts(start);
       if (!isWithinAvailability(dateStr, dayOfWeek, minutes, minutes + duration, availability, overrides)) {
-        return { date: start.toISOString(), index, status: 'conflict' as const, reason: 'unavailable' as const, conflictIsOwnLesson: false };
+        return {
+          date: start.toISOString(),
+          index,
+          status: 'conflict' as const,
+          reason: 'unavailable' as const,
+          conflictIsOwnLesson: false,
+          blockReason: blockedReasonForDate(dateStr, overrides),
+        };
       }
       // The busy-block mirror only extends SYNC_WINDOW_DAYS out, so a student
       // occurrence beyond it can't be checked — reject rather than assume free.

@@ -38,6 +38,7 @@ export default function AdminCalendarPage() {
   const [showCancelledLessons, setShowCancelledLessons] = useState(false);
   const [blockOutMode, setBlockOutMode] = useState(false);
   const [selectedBlockOutDates, setSelectedBlockOutDates] = useState<Set<string>>(new Set());
+  const [blockOutReason, setBlockOutReason] = useState('');
   const [cancelLessonsOnBlockOut, setCancelLessonsOnBlockOut] = useState(false);
   const [syncState, setSyncState] = useState<{ last_success_at: string | null; last_error: string | null } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -206,9 +207,9 @@ export default function AdminCalendarPage() {
   };
 
   // Handle saving a date-specific override
-  const handleSaveOverride = async (data: { is_available: boolean; start_time?: string; end_time?: string }) => {
+  const handleSaveOverride = async (data: { is_available: boolean; start_time?: string; end_time?: string; reason?: string | null }) => {
     const dateStr = formatDate(selectedDate, 'iso');
-    
+
     try {
       const res = await fetch('/api/availability/overrides', {
         method: 'POST',
@@ -218,6 +219,7 @@ export default function AdminCalendarPage() {
           is_available: data.is_available,
           start_time: data.start_time || null,
           end_time: data.end_time || null,
+          reason: data.reason || null,
         }),
       });
 
@@ -260,7 +262,8 @@ export default function AdminCalendarPage() {
   // Handle saving multiple block out days
   const handleSaveBlockOutDays = async () => {
     const dates = Array.from(selectedBlockOutDates);
-    
+    const reason = blockOutReason.trim() || null;
+
     try {
       // Save all block out dates
       const results = await Promise.all(
@@ -273,6 +276,7 @@ export default function AdminCalendarPage() {
               is_available: false,
               start_time: null,
               end_time: null,
+              reason,
             }),
           }).then((res) => res.ok ? res.json() : null)
         )
@@ -293,14 +297,20 @@ export default function AdminCalendarPage() {
         return updated;
       });
 
-      // Cancel lessons if user opted in
+      // Cancel lessons if user opted in. Passing the block's reason as the
+      // cancellation reason and notify_cancellation lets the server email the
+      // affected student why their lesson disappeared (see PATCH /api/lessons/[id]).
       if (cancelLessonsOnBlockOut && lessonsOnBlockOutDates.length > 0) {
-        const cancelResults = await Promise.all(
+        await Promise.all(
           lessonsOnBlockOutDates.map((lesson) =>
             fetch(`/api/lessons/${lesson.id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: 'cancelled' }),
+              body: JSON.stringify({
+                status: 'cancelled',
+                cancellation_reason: reason || 'This date is no longer available',
+                notify_cancellation: true,
+              }),
             })
           )
         );
@@ -317,6 +327,7 @@ export default function AdminCalendarPage() {
       // Exit block out mode
       setBlockOutMode(false);
       setSelectedBlockOutDates(new Set());
+      setBlockOutReason('');
       setCancelLessonsOnBlockOut(false);
     } catch (error) {
       console.error('Error saving block out days:', error);
@@ -524,6 +535,7 @@ export default function AdminCalendarPage() {
                 onClick={() => {
                   setBlockOutMode(false);
                   setSelectedBlockOutDates(new Set());
+                  setBlockOutReason('');
                   setCancelLessonsOnBlockOut(false);
                 }}
                 className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -538,6 +550,21 @@ export default function AdminCalendarPage() {
                 Block {selectedBlockOutDates.size} Day{selectedBlockOutDates.size !== 1 ? 's' : ''}
               </button>
             </div>
+          </div>
+
+          <div className="mt-4">
+            <label htmlFor="block-out-reason" className="block text-sm font-medium text-red-800 dark:text-red-200 mb-1.5">
+              Reason <span className="font-normal text-red-600/70 dark:text-red-400/70">(optional, shown to students)</span>
+            </label>
+            <input
+              id="block-out-reason"
+              type="text"
+              value={blockOutReason}
+              onChange={(e) => setBlockOutReason(e.target.value)}
+              placeholder="e.g. Christmas break"
+              maxLength={100}
+              className="w-full sm:w-80 rounded-lg border-red-200 dark:border-red-800 dark:bg-gray-800 dark:text-white text-sm focus:ring-red-500 focus:border-red-500"
+            />
           </div>
 
           {/* Warning about lessons on selected dates */}
@@ -662,7 +689,9 @@ export default function AdminCalendarPage() {
                           Custom: {formatTime12Hour(dayOverride.start_time)} - {formatTime12Hour(dayOverride.end_time)}
                         </span>
                       ) : (
-                        <span className="text-red-600 dark:text-red-400">Blocked for this day</span>
+                        <span className="text-red-600 dark:text-red-400">
+                          Blocked for this day{dayOverride.reason ? ` — ${dayOverride.reason}` : ''}
+                        </span>
                       )}
                     </div>
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">One-time override</p>
