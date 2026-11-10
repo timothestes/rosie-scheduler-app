@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { ADMIN_SLOT_STEP_MINUTES } from '@/config/scheduling';
 import Modal from '@/components/Modal';
 import { lessonTypes, formatRate, getWeeklyMonthlyRate, getBiweeklyMonthlyRate } from '@/config/lessonTypes';
 import type { User } from '@/types';
@@ -20,12 +21,12 @@ export default function AdminScheduleLessonModal({
 }: AdminScheduleLessonModalProps) {
   const today = new Date().toISOString().split('T')[0];
 
-  // Generate 30-min time slots from 6:00 AM to 9:30 PM
+  // Generate start times from 6:00 AM to 9:00 PM
   const timeSlots = (() => {
     const slots: { value: string; label: string }[] = [];
     for (let h = 6; h <= 21; h++) {
-      for (let m = 0; m < 60; m += 30) {
-        if (h === 21 && m === 30) break;
+      for (let m = 0; m < 60; m += ADMIN_SLOT_STEP_MINUTES) {
+        if (h === 21 && m > 0) break;
         const hh = h.toString().padStart(2, '0');
         const mm = m.toString().padStart(2, '0');
         const value = `${hh}:${mm}`;

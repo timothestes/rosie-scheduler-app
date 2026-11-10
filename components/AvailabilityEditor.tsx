@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { ADMIN_SLOT_STEP_MINUTES } from '@/config/scheduling';
 import { dayNames, formatTime24to12 } from '@/lib/utils';
 import type { Availability } from '@/types';
 
@@ -115,7 +116,7 @@ export default function AvailabilityEditor({
   const generateTimeOptions = () => {
     const options: string[] = [];
     for (let hour = 6; hour <= 22; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
+      for (let minute = 0; minute < 60; minute += ADMIN_SLOT_STEP_MINUTES) {
         options.push(
           `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
         );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { ADMIN_SLOT_STEP_MINUTES } from '@/config/scheduling';
 import Modal from '@/components/Modal';
 import { getLessonType, getLessonRate, formatRate, lessonTypes } from '@/config/lessonTypes';
 import type { Lesson } from '@/types';
@@ -14,12 +15,12 @@ interface RescheduleLessonModalProps {
 
 const pad = (n: number) => n.toString().padStart(2, '0');
 
-// 30-min slots 6:00 AM–9:30 PM (mirrors AdminScheduleLessonModal).
+// Start times 6:00 AM–9:00 PM (mirrors AdminScheduleLessonModal).
 const timeSlots = (() => {
   const slots: { value: string; label: string }[] = [];
   for (let h = 6; h <= 21; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      if (h === 21 && m === 30) break;
+    for (let m = 0; m < 60; m += ADMIN_SLOT_STEP_MINUTES) {
+      if (h === 21 && m > 0) break;
       const value = `${pad(h)}:${pad(m)}`;
       const label = new Date(`2000-01-01T${value}`).toLocaleTimeString('en-US', {
         hour: 'numeric', minute: '2-digit', hour12: true,
