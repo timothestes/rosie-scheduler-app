@@ -9,6 +9,7 @@ import CancelLessonModal from '@/components/CancelLessonModal';
 import Modal from '@/components/Modal';
 import { formatDate, formatTime24to12, parseTimeToDate } from '@/lib/utils';
 import { maxAvailableDuration } from '@/lib/conflicts-core';
+import { STUDENT_SLOT_STEP_MINUTES, MIN_LESSON_MINUTES } from '@/config/scheduling';
 import { blockedReasonForDate } from '@/lib/availability-core';
 import { commuteConfig } from '@/config/commute';
 import type { Lesson, Availability, AvailabilityOverride, TimeSlot } from '@/types';
@@ -148,9 +149,9 @@ export default function SchedulePage() {
     }
 
     // Generate time slots for each availability window
-    // Use 30-minute increments - the TimeSlotPicker will handle duration-based filtering
+    // Start times step by STUDENT_SLOT_STEP_MINUTES - the TimeSlotPicker will
+    // handle duration-based filtering
     const slots: TimeSlot[] = [];
-    const slotIncrement = 30; // minutes
 
     for (const window of availabilitySlots) {
       const [startHour, startMin] = window.start.split(':').map(Number);
@@ -160,8 +161,8 @@ export default function SchedulePage() {
       const windowEnd = endHour * 60 + endMin;
       const windowEndStr = window.end;
 
-      // Generate slots starting every 30 minutes, as long as at least 30 mins fits
-      for (let time = windowStart; time + slotIncrement <= windowEnd; time += 30) {
+      // Generate a slot at every step, as long as the shortest lesson still fits
+      for (let time = windowStart; time + MIN_LESSON_MINUTES <= windowEnd; time += STUDENT_SLOT_STEP_MINUTES) {
         const hours = Math.floor(time / 60);
         const minutes = time % 60;
         const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
@@ -173,8 +174,8 @@ export default function SchedulePage() {
           continue;
         }
 
-        // End time is tentatively 30 minutes after start (minimum slot)
-        const endTime = time + slotIncrement;
+        // End time is tentatively the shortest lesson after start (minimum slot)
+        const endTime = time + MIN_LESSON_MINUTES;
         slots.push({
           start: timeStr,
           end: `${Math.floor(endTime / 60).toString().padStart(2, '0')}:${(endTime % 60).toString().padStart(2, '0')}`,
