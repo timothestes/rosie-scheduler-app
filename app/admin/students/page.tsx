@@ -407,6 +407,10 @@ export default function AdminStudentsPage() {
         }),
       });
       if (res.ok) {
+        const created = await res.json();
+        if (created.invite_sent === false) {
+          alert('Student added, but the invitation email could not be sent. Open their profile and use "Send Account Setup Email" to try again.');
+        }
         setShowAddStudent(false);
         setNewStudentForm({ full_name: '', email: '', phone: '', address: '', discount_percent: 0, send_invite: true });
         await fetchStudents();
