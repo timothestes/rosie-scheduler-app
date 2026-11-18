@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
+import { resend, EMAIL_CONFIG } from '@/lib/resend';
+import { buildAuthEmail, buildPasswordLink } from '@/lib/auth-email';
 
 // GET /api/students - Get all students (admin only)
 export async function GET(request: NextRequest) {
@@ -74,37 +76,23 @@ export async function POST(request: NextRequest) {
 
   const adminClient = createAdminClient();
 
-  // Create the auth user (triggers handle_new_user to create public.users row)
-  let newUserId: string;
-  if (send_invite) {
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-      email.trim(),
-      { data: { full_name: full_name.trim() } }
-    );
-    if (inviteError) {
-      if (inviteError.message?.includes('already been registered')) {
-        return NextResponse.json({ error: 'A student with this email already exists' }, { status: 409 });
-      }
-      console.error('Error inviting user:', inviteError);
-      return NextResponse.json({ error: 'Failed to create student account' }, { status: 500 });
+  // Create the auth user (triggers handle_new_user to create public.users row).
+  // The account gets a random password; the student chooses their own from the
+  // setup email below (or later via "Forgot password?").
+  const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
+    email: email.trim(),
+    email_confirm: true,
+    password: crypto.randomUUID(),
+    user_metadata: { full_name: full_name.trim() },
+  });
+  if (createError) {
+    if (createError.message?.includes('already been registered') || createError.message?.includes('already exists')) {
+      return NextResponse.json({ error: 'A student with this email already exists' }, { status: 409 });
     }
-    newUserId = inviteData.user.id;
-  } else {
-    const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
-      email: email.trim(),
-      email_confirm: true,
-      password: crypto.randomUUID(),
-      user_metadata: { full_name: full_name.trim() },
-    });
-    if (createError) {
-      if (createError.message?.includes('already been registered') || createError.message?.includes('already exists')) {
-        return NextResponse.json({ error: 'A student with this email already exists' }, { status: 409 });
-      }
-      console.error('Error creating user:', createError);
-      return NextResponse.json({ error: 'Failed to create student account' }, { status: 500 });
-    }
-    newUserId = createData.user.id;
+    console.error('Error creating user:', createError);
+    return NextResponse.json({ error: 'Failed to create student account' }, { status: 500 });
   }
+  const newUserId = createData.user.id;
 
   // Update the auto-created public.users row with the extra profile fields
   // Use admin client to bypass RLS (admin can't update another user's row with normal client)
@@ -128,5 +116,40 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Student account created but profile update failed' }, { status: 500 });
   }
 
-  return NextResponse.json(updatedUser, { status: 201 });
+  // Invitation: our own setup email (sent as Rosie via Resend) linking to the
+  // set-password page. A failure here doesn't undo the account — the teacher
+  // can resend from the student's profile.
+  let inviteSent: boolean | undefined;
+  if (send_invite) {
+    inviteSent = false;
+    try {
+      const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+        type: 'recovery',
+        email: email.trim(),
+      });
+      if (linkError || !linkData?.properties?.hashed_token) {
+        console.error('Error generating setup link:', linkError);
+      } else {
+        const { subject, html, text } = buildAuthEmail({
+          kind: 'setup',
+          fullName: full_name,
+          link: buildPasswordLink(EMAIL_CONFIG.appUrl, linkData.properties.hashed_token),
+          appUrl: EMAIL_CONFIG.appUrl,
+        });
+        const { error: emailError } = await resend.emails.send({
+          from: EMAIL_CONFIG.fromEmail,
+          to: email.trim(),
+          subject,
+          html,
+          text,
+        });
+        if (emailError) console.error('Error sending setup email:', emailError);
+        else inviteSent = true;
+      }
+    } catch (err) {
+      console.error('Error sending setup email:', err);
+    }
+  }
+
+  return NextResponse.json({ ...updatedUser, invite_sent: inviteSent }, { status: 201 });
 }
