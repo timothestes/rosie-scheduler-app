@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { signInWithEmail, signUpWithEmail } from '@/app/login/actions'
 
 export default function EmailAuthForm() {
@@ -53,9 +54,19 @@ export default function EmailAuthForm() {
           />
         </div>
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Password
-          </label>
+          <div className="flex items-baseline justify-between mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Password
+            </label>
+            {!isSignUp && (
+              <Link
+                href="/login/forgot-password"
+                className="text-sm text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
+              >
+                Forgot password?
+              </Link>
+            )}
+          </div>
           <input
             id="password"
             name="password"

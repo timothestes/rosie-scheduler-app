@@ -3,6 +3,14 @@
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { resend, EMAIL_CONFIG } from '@/lib/resend'
+import {
+  buildAuthEmail,
+  buildPasswordLink,
+  FORGOT_PASSWORD_PATH,
+  RESET_PASSWORD_PATH,
+} from '@/lib/auth-email'
 
 // Derive the site URL from the actual request so confirmation/OAuth links
 // are correct in every environment (localhost, preview, production), instead
@@ -72,6 +80,114 @@ export async function signUpWithEmail(formData: FormData) {
   }
 
   redirect('/login?message=Check your email to confirm your account')
+}
+
+// Minimum gap between self-service reset emails to the same address, so the
+// form can't be used to flood someone's inbox.
+const RESET_EMAIL_COOLDOWN_MS = 60_000
+
+async function sendPasswordResetEmail(email: string) {
+  const admin = createAdminClient()
+
+  // Profile lookup is best-effort: it gives us a name for the greeting and
+  // the auth user id for the cooldown check.
+  const { data: profile } = await admin
+    .from('users')
+    .select('id, full_name')
+    .eq('email', email)
+    .maybeSingle()
+
+  if (profile?.id) {
+    const { data: existing } = await admin.auth.admin.getUserById(profile.id)
+    const lastSent = existing?.user?.recovery_sent_at
+    if (lastSent && Date.now() - new Date(lastSent).getTime() < RESET_EMAIL_COOLDOWN_MS) {
+      return
+    }
+  }
+
+  const { data, error } = await admin.auth.admin.generateLink({ type: 'recovery', email })
+  // No account for this email (or a transient failure): send nothing. The
+  // caller shows the same message either way.
+  if (error || !data?.properties?.hashed_token) return
+
+  // Links must point at our real domain in production — never at a host taken
+  // from request headers, which a crafted request could spoof.
+  const appUrl = process.env.NODE_ENV === 'production' ? EMAIL_CONFIG.appUrl : await getSiteUrl()
+
+  const { subject, html, text } = buildAuthEmail({
+    kind: 'self-reset',
+    fullName: profile?.full_name,
+    link: buildPasswordLink(appUrl, data.properties.hashed_token),
+    appUrl,
+  })
+
+  const { error: emailError } = await resend.emails.send({
+    from: EMAIL_CONFIG.fromEmail,
+    to: email,
+    subject,
+    html,
+    text,
+  })
+  if (emailError) console.error('Error sending password reset email:', emailError)
+}
+
+export async function requestPasswordReset(formData: FormData) {
+  const email = String(formData.get('email') ?? '').trim().toLowerCase()
+
+  if (email) {
+    try {
+      await sendPasswordResetEmail(email)
+    } catch (err) {
+      console.error('Password reset request failed:', err)
+    }
+  }
+
+  // Same response whether or not the account exists, so this form can't be
+  // used to discover who has an account.
+  redirect(`${FORGOT_PASSWORD_PATH}?sent=1`)
+}
+
+export async function resetPassword(formData: FormData) {
+  const tokenHash = String(formData.get('token_hash') ?? '')
+  const password = String(formData.get('password') ?? '')
+  const confirm = String(formData.get('confirm') ?? '')
+
+  const backToForm = (message: string): never => {
+    const params = new URLSearchParams({ message })
+    if (tokenHash) params.set('token_hash', tokenHash)
+    redirect(`${RESET_PASSWORD_PATH}?${params}`)
+  }
+
+  // Validate before touching the token — it's single-use.
+  if (password.length < 6) backToForm('Use at least 6 characters.')
+  if (password !== confirm) backToForm("Those passwords don't match. Please try again.")
+
+  const supabase = await createClient()
+  const expired = () =>
+    redirect(
+      `${FORGOT_PASSWORD_PATH}?message=${encodeURIComponent(
+        'That link has expired or was already used. Enter your email to get a new one.'
+      )}`
+    )
+
+  if (tokenHash) {
+    // Redeeming the token signs the student in.
+    const { error } = await supabase.auth.verifyOtp({ type: 'recovery', token_hash: tokenHash })
+    if (error) expired()
+  } else {
+    // No token: only reachable right after a token was redeemed but the
+    // password was rejected, in which case the student is already signed in.
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) expired()
+  }
+
+  const { error } = await supabase.auth.updateUser({ password })
+  if (error) {
+    // The token is spent but the session is live, so retry without it.
+    redirect(`${RESET_PASSWORD_PATH}?message=${encodeURIComponent(error.message)}`)
+  }
+
+  redirect('/')
 }
 
 export async function signInWithGoogle() {
