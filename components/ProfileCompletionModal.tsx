@@ -159,7 +159,7 @@ export default function ProfileCompletionModal({
         <div className="fixed inset-0 bg-black/50" />
         
         {/* Modal */}
-        <div className="flex min-h-full items-center justify-center p-4">
+        <div className="flex min-h-full items-start justify-center p-4 sm:pt-[8vh]">
           <div className="relative w-full max-w-md transform overflow-hidden rounded-xl bg-white dark:bg-gray-800 shadow-xl">
             {/* Header */}
             <div className="px-6 pt-6 pb-4 border-b dark:border-gray-700">
@@ -233,7 +233,7 @@ export default function ProfileCompletionModal({
       <div className="fixed inset-0 bg-black/50" />
       
       {/* Modal */}
-      <div className="flex min-h-full items-center justify-center p-4">
+      <div className="flex min-h-full items-start justify-center p-4 sm:pt-[8vh]">
         <div className="relative w-full max-w-md transform overflow-hidden rounded-xl bg-white dark:bg-gray-800 shadow-xl">
           {/* Header */}
           <div className="px-6 pt-6 pb-4 border-b dark:border-gray-700">
