@@ -1,6 +1,7 @@
 'use client';
 
 import { formatDate } from '@/lib/utils';
+import { countLessonBuckets, getNextLesson } from '@/lib/lesson-status';
 import type { User, Lesson } from '@/types';
 
 interface StudentCardProps {
@@ -20,17 +21,9 @@ export default function StudentCard({
   onScheduleLesson,
   onSendReminder,
 }: StudentCardProps) {
-  const upcomingLessons = lessons.filter(
-    (l) => new Date(l.start_time) > new Date() && l.status === 'scheduled'
-  );
-  const completedLessons = lessons.filter(
-    (l) => l.status === 'completed'
-  );
-  const cancelledLessons = lessons.filter(
-    (l) => l.status === 'cancelled'
-  );
-
-  const nextLesson = upcomingLessons[0];
+  const now = new Date();
+  const counts = countLessonBuckets(lessons, now);
+  const nextLesson = getNextLesson(lessons, now);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-4 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow border border-transparent dark:border-gray-700">
@@ -74,15 +67,15 @@ export default function StudentCard({
       <div className="grid grid-cols-3 gap-3 mb-4 text-sm">
         <div>
           <p className="text-gray-500 dark:text-gray-400 text-xs">Upcoming</p>
-          <p className="font-medium text-gray-900 dark:text-white">{upcomingLessons.length}</p>
+          <p className="font-medium text-gray-900 dark:text-white">{counts.upcoming}</p>
         </div>
         <div>
           <p className="text-gray-500 dark:text-gray-400 text-xs">Completed</p>
-          <p className="font-medium text-gray-900 dark:text-white">{completedLessons.length}</p>
+          <p className="font-medium text-gray-900 dark:text-white">{counts.completed}</p>
         </div>
         <div>
           <p className="text-gray-500 dark:text-gray-400 text-xs">Cancelled</p>
-          <p className="font-medium text-gray-900 dark:text-white">{cancelledLessons.length}</p>
+          <p className="font-medium text-gray-900 dark:text-white">{counts.cancelled}</p>
         </div>
       </div>
 

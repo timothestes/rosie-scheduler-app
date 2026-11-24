@@ -11,6 +11,7 @@ import EditLessonModal from '@/components/EditLessonModal';
 import RescheduleLessonModal from '@/components/RescheduleLessonModal';
 import { formatDate } from '@/lib/utils';
 import { getLessonType } from '@/config/lessonTypes';
+import { lessonBucket, countLessonBuckets, countUnpaidPastLessons } from '@/lib/lesson-status';
 import type { User, Lesson, StudentNote } from '@/types';
 
 interface StudentWithLessons {
@@ -93,9 +94,7 @@ export default function AdminStudentsPage() {
 
         const studentsWithLessons = studentsData.map((student) => {
           const studentLessons = lessonsData.filter((l) => l.student_id === student.id);
-          const unpaidCount = studentLessons.filter(
-            (l) => !l.is_paid && l.status === 'scheduled' && new Date(l.start_time) < new Date()
-          ).length;
+          const unpaidCount = countUnpaidPastLessons(studentLessons);
 
           return {
             student,
@@ -111,6 +110,17 @@ export default function AdminStudentsPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Apply a lesson change to a student's card so its counts stay in sync with the details modal
+  const updateCardLessons = (studentId: string, update: (lessons: Lesson[]) => Lesson[]) => {
+    setStudents((prev) =>
+      prev.map((s) => {
+        if (s.student.id !== studentId) return s;
+        const lessons = update(s.lessons);
+        return { ...s, lessons, unpaidCount: countUnpaidPastLessons(lessons) };
+      })
+    );
   };
 
   const fetchStudentDetails = async (studentId: string) => {
@@ -182,9 +192,7 @@ export default function AdminStudentsPage() {
           const updatedLessons = s.lessons.map((l) =>
             l.id === lessonId ? { ...l, is_paid: isPaid } : l
           );
-          const newUnpaidCount = updatedLessons.filter(
-            (l) => !l.is_paid && l.status === 'scheduled' && new Date(l.start_time) < new Date()
-          ).length;
+          const newUnpaidCount = countUnpaidPastLessons(updatedLessons);
           return {
             ...s,
             lessons: updatedLessons,
@@ -213,9 +221,7 @@ export default function AdminStudentsPage() {
               const revertedLessons = s.lessons.map((l) =>
                 l.id === lessonId ? { ...l, is_paid: !isPaid } : l
               );
-              const newUnpaidCount = revertedLessons.filter(
-                (l) => !l.is_paid && l.status === 'scheduled' && new Date(l.start_time) < new Date()
-              ).length;
+              const newUnpaidCount = countUnpaidPastLessons(revertedLessons);
               return {
                 ...s,
                 lessons: revertedLessons,
@@ -238,9 +244,7 @@ export default function AdminStudentsPage() {
             const revertedLessons = s.lessons.map((l) =>
               l.id === lessonId ? { ...l, is_paid: !isPaid } : l
             );
-            const newUnpaidCount = revertedLessons.filter(
-              (l) => !l.is_paid && l.status === 'scheduled' && new Date(l.start_time) < new Date()
-            ).length;
+            const newUnpaidCount = countUnpaidPastLessons(revertedLessons);
             return {
               ...s,
               lessons: revertedLessons,
@@ -271,35 +275,26 @@ export default function AdminStudentsPage() {
     });
 
     if (res.ok) {
-      if (cancelSeries && lessonToCancel.recurring_series_id) {
-        // Update all future lessons in the series locally
-        const updateLessons = (lessons: Lesson[]) =>
-          lessons.map((l) => {
-            if (l.id === lessonToCancel.id) {
-              return { ...l, status: 'cancelled' as const };
-            }
-            if (
-              l.recurring_series_id === lessonToCancel.recurring_series_id &&
-              new Date(l.start_time) > new Date(lessonToCancel.start_time) &&
-              l.status === 'scheduled'
-            ) {
-              return { ...l, status: 'cancelled' as const };
-            }
-            return l;
-          });
+      const seriesId = cancelSeries ? lessonToCancel.recurring_series_id : null;
+      // Cancel this lesson, plus (for a series cancel) every later scheduled one in the series
+      const updateLessons = (lessons: Lesson[]) =>
+        lessons.map((l) => {
+          if (l.id === lessonToCancel.id) {
+            return { ...l, status: 'cancelled' as const };
+          }
+          if (
+            seriesId &&
+            l.recurring_series_id === seriesId &&
+            new Date(l.start_time) > new Date(lessonToCancel.start_time) &&
+            l.status === 'scheduled'
+          ) {
+            return { ...l, status: 'cancelled' as const };
+          }
+          return l;
+        });
 
-        setStudentLessons(updateLessons);
-        setStudents((prev) =>
-          prev.map((s) => ({
-            ...s,
-            lessons: updateLessons(s.lessons),
-          }))
-        );
-      } else {
-        setStudentLessons((prev) =>
-          prev.map((l) => (l.id === lessonToCancel.id ? { ...l, status: 'cancelled' } : l))
-        );
-      }
+      setStudentLessons(updateLessons);
+      updateCardLessons(lessonToCancel.student_id, updateLessons);
     }
     
     setLessonToCancel(null);
@@ -481,7 +476,10 @@ export default function AdminStudentsPage() {
   };
 
   const handleEditLessonSuccess = (updatedLesson: Lesson) => {
-    setStudentLessons(prev => prev.map(l => l.id === updatedLesson.id ? updatedLesson : l));
+    const replace = (lessons: Lesson[]) =>
+      lessons.map(l => l.id === updatedLesson.id ? updatedLesson : l);
+    setStudentLessons(replace);
+    updateCardLessons(updatedLesson.student_id, replace);
     setLessonToEdit(null);
   };
 
@@ -814,29 +812,14 @@ export default function AdminStudentsPage() {
             <div className="border-b border-gray-200 dark:border-gray-700">
               <nav className="flex space-x-1 overflow-x-auto">
                 {(() => {
-                  const now = new Date();
-
-                  // Calculate counts including in-progress and past scheduled lessons for completed
-                  const completedCount = studentLessons.filter(l => {
-                    if (l.status === 'completed') return true;
-
-                    // Check if lesson is in progress or has ended
-                    const startTime = new Date(l.start_time);
-                    const lessonType = getLessonType(l.lesson_type);
-                    const durationMinutes = lessonType?.duration ?? 60;
-                    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
-                    const isInProgress = startTime <= now && endTime > now && l.status === 'scheduled';
-                    const hasPassed = endTime <= now && l.status === 'scheduled';
-
-                    return isInProgress || hasPassed;
-                  }).length;
+                  const counts = countLessonBuckets(studentLessons);
 
                   return [
                     { key: 'all', label: 'All', count: studentLessons.length },
                     {
                       key: 'upcoming',
                       label: 'Upcoming',
-                      count: studentLessons.filter(l => new Date(l.start_time) > now && l.status === 'scheduled').length
+                      count: counts.upcoming
                     },
                     {
                       key: 'unpaid',
@@ -846,12 +829,12 @@ export default function AdminStudentsPage() {
                     {
                       key: 'completed',
                       label: 'Completed',
-                      count: completedCount
+                      count: counts.completed
                     },
                     {
                       key: 'cancelled',
                       label: 'Cancelled',
-                      count: studentLessons.filter(l => l.status === 'cancelled').length
+                      count: counts.cancelled
                     },
                   ];
                 })().map(({ key, label, count }) => (
@@ -880,24 +863,11 @@ export default function AdminStudentsPage() {
                 // Filter lessons based on selected filter
                 const now = new Date();
                 const filteredLessons = studentLessons.filter(lesson => {
-                  const startTime = new Date(lesson.start_time);
-                  const isFuture = startTime > now;
-
-                  // Calculate if lesson is in progress
-                  const lessonType = getLessonType(lesson.lesson_type);
-                  const durationMinutes = lessonType?.duration ?? 60;
-                  const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
-                  const isInProgress = startTime <= now && endTime > now && lesson.status === 'scheduled';
-
                   switch (lessonFilter) {
                     case 'upcoming':
-                      return isFuture && lesson.status === 'scheduled';
                     case 'completed':
-                      // Include completed lessons, in-progress lessons, and past scheduled lessons
-                      const hasPassed = endTime <= now && lesson.status === 'scheduled';
-                      return lesson.status === 'completed' || isInProgress || hasPassed;
                     case 'cancelled':
-                      return lesson.status === 'cancelled';
+                      return lessonBucket(lesson, now) === lessonFilter;
                     case 'unpaid':
                       return !lesson.is_paid && lesson.status === 'scheduled';
                     case 'all':
