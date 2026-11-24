@@ -8,6 +8,7 @@ import Modal from '@/components/Modal';
 import LessonCard from '@/components/LessonCard';
 import CancelLessonModal from '@/components/CancelLessonModal';
 import RescheduleLessonModal from '@/components/RescheduleLessonModal';
+import AdminScheduleLessonModal from '@/components/AdminScheduleLessonModal';
 import { formatDate, formatTime, dayNames, startOfMonth, endOfMonth, addMonths } from '@/lib/utils';
 import { getLessonType } from '@/config/lessonTypes';
 import type { Lesson, Availability, GoogleCalendarEvent, AvailabilityOverride } from '@/types';
@@ -42,6 +43,8 @@ export default function AdminCalendarPage() {
   const [cancelLessonsOnBlockOut, setCancelLessonsOnBlockOut] = useState(false);
   const [syncState, setSyncState] = useState<{ last_success_at: string | null; last_error: string | null } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  // Date ('YYYY-MM-DD') the Schedule Lesson modal opens on; null when closed.
+  const [scheduleDate, setScheduleDate] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -442,6 +445,11 @@ export default function AdminCalendarPage() {
   const dayOverride = overrides.find((o) => o.override_date === dateStr);
   const dayAvailability = availability.filter((a) => a.day_of_week === dayOfWeek && a.is_recurring);
 
+  const todayStr = formatDate(new Date(), 'iso');
+  const selectedDayIsPast = dateStr < todayStr;
+  // Book on the day she's looking at; a past day starts on today instead.
+  const openScheduleLesson = () => setScheduleDate(selectedDayIsPast ? todayStr : dateStr);
+
   const syncIsStale =
     googleCalendarConnected === true &&
     (!syncState?.last_success_at ||
@@ -476,8 +484,17 @@ export default function AdminCalendarPage() {
             </button>
           )}
           <button
+            onClick={openScheduleLesson}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Lesson
+          </button>
+          <button
             onClick={() => setShowAvailabilityEditor(true)}
-            className="flex-1 sm:flex-none px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 transition-colors"
+            className="flex-1 sm:flex-none px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
             <span className="hidden sm:inline">Edit Weekly Availability</span>
             <span className="sm:hidden">Edit Availability</span>
@@ -734,9 +751,22 @@ export default function AdminCalendarPage() {
 
           {/* Lessons */}
           <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-              Lessons ({selectedDateLessons.length})
-            </h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Lessons ({selectedDateLessons.length})
+              </h3>
+              {!selectedDayIsPast && (
+                <button
+                  onClick={openScheduleLesson}
+                  className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Schedule</span>
+                </button>
+              )}
+            </div>
             {selectedDateLessons.length > 0 ? (
               <div className="space-y-3">
                 {selectedDateLessons.map((lesson) => (
@@ -820,6 +850,18 @@ export default function AdminCalendarPage() {
           }}
         />
       )}
+
+      <AdminScheduleLessonModal
+        isOpen={scheduleDate !== null}
+        onClose={() => setScheduleDate(null)}
+        initialDate={scheduleDate ?? undefined}
+        onSuccess={(bookedDate) => {
+          // Jump to the booked day. A fresh Date re-runs fetchData (its
+          // dependency), so the new lesson shows even on the same day.
+          const [y, m, d] = bookedDate.split('-').map(Number);
+          setSelectedDate(new Date(y, m - 1, d));
+        }}
+      />
 
       {/* Day Override Editor Modal */}
       <Modal
