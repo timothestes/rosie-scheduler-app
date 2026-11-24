@@ -20,22 +20,31 @@ export default function Modal({
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!isOpen) return;
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
       }
     };
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'hidden';
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'unset';
-    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
+
+  // Lock page scroll while open. Hiding the page's scrollbar would widen the
+  // page and slide everything sideways (on systems with always-visible
+  // scrollbars), so pad the body by the scrollbar's width to hold it still.
+  useEffect(() => {
+    if (!isOpen) return;
+    const { body, documentElement } = document;
+    const scrollbarWidth = window.innerWidth - documentElement.clientWidth;
+    const previous = { overflow: body.style.overflow, paddingRight: body.style.paddingRight };
+    body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
+    return () => {
+      body.style.overflow = previous.overflow;
+      body.style.paddingRight = previous.paddingRight;
+    };
+  }, [isOpen]);
 
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (e.target === overlayRef.current) {
@@ -55,14 +64,18 @@ export default function Modal({
     '4xl': 'max-w-4xl',
   };
 
+  // The dialog is pinned near the top rather than vertically centered: a
+  // centered box moves its top edge by half of every height change, so content
+  // that loads in or expands made the whole dialog jump. Pinned, it only grows
+  // downward, and the body scrolls once it reaches the bottom of the screen.
   return (
     <div
       ref={overlayRef}
       onClick={handleOverlayClick}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50"
+      className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-[8vh] bg-black bg-opacity-50"
     >
-      <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-hidden`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b dark:border-gray-700">
+      <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full ${sizeClasses[size]} max-h-full flex flex-col overflow-hidden`}>
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h2>
           <button
             onClick={onClose}
@@ -74,7 +87,7 @@ export default function Modal({
             </svg>
           </button>
         </div>
-        <div className="px-6 py-4 overflow-y-auto max-h-[calc(90vh-120px)]">
+        <div className="px-6 py-4 overflow-y-auto min-h-0">
           {children}
         </div>
       </div>
