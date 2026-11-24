@@ -90,6 +90,18 @@ A lesson scheduling application built with Next.js and Supabase, featuring role-
 - Cancellation rate/fee
 - Notice period requirements
 
+## Public Site (rosiequintana.com)
+
+Rosie's portfolio (Home, Coaching, Media) is served by this same app from `app/(site)/`, replacing her Wix site.
+
+- **Content** lives in the repo: text in the page files, photo and video lists in `app/(site)/_content/`, images and downloads in `public/site/`. Videos stay on YouTube.
+- **Prices** on the Coaching page are read from `config/lessonTypes.ts`, the same config the booking screens use.
+- **Contact forms** post to `/api/contact`, which emails `CONTACT_FORM_TO` (falling back to `PRIMARY_ADMIN_EMAIL`) with the visitor as reply-to.
+- **Two domains, one deployment.** `lib/site-routing.ts` decides what each host shows:
+  - `rosiequintana.com` serves only the portfolio. Any scheduler path requested there (`/login`, `/schedule`, ...) redirects to `rosielessons.com`, where auth is configured.
+  - `rosielessons.com` is unchanged: its root still opens the login page for signed-out visitors and forwards signed-in users to `/dashboard`, which sends them on to `/admin` or `/schedule`.
+  - Preview URLs and `localhost` show the portfolio at `/` when signed out.
+
 ## Database Schema
 
 ### Tables
