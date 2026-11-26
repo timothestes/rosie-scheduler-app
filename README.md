@@ -90,6 +90,20 @@ A lesson scheduling application built with Next.js and Supabase, featuring role-
 - Cancellation rate/fee
 - Notice period requirements
 
+## Public Site (rosiequintana.com)
+
+Rosie's acting portfolio and her lessons page are served by this same app from `app/(site)/`, replacing her Wix site. They are kept apart on purpose: the acting site markets her as a performer, and lessons live on the scheduler's domain.
+
+- **Acting site** (`app/(site)/(acting)/`): Home and Media, shown at `rosiequintana.com`. It does not sell or book lessons; the About text carries the one link across to the lessons page.
+- **Lessons page** (`app/(site)/(lessons)/coaching/`): shown at `rosielessons.com/coaching`, with prices read from `config/lessonTypes.ts`, the same config the booking screens use.
+- **Content** lives in the repo: text in the page files; credits, photo and video lists in `app/(site)/_content/`; images and downloads in `public/site/`. Videos stay on YouTube.
+- **Look**: palette, type and button styles are in `app/(site)/site.css`.
+- **Contact forms** post to `/api/contact`, which emails `CONTACT_FORM_TO` (falling back to `PRIMARY_ADMIN_EMAIL`) with the visitor as reply-to.
+- **Two domains, one deployment.** `lib/site-routing.ts` decides what each host shows:
+  - `rosiequintana.com` serves only the acting pages. Anything else requested there (`/coaching`, `/login`, `/schedule`, ...) redirects to the same path on `rosielessons.com`, where auth is configured.
+  - `rosielessons.com` is unchanged apart from the public `/coaching` page: its root still opens the login page for signed-out visitors and forwards signed-in users to `/dashboard`, which sends them on to `/admin` or `/schedule`.
+  - Preview URLs and `localhost` show the acting Home page at `/` when signed out.
+
 ## Database Schema
 
 ### Tables

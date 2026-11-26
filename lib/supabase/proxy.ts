@@ -1,7 +1,22 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { decideAppHostRoute, decidePortfolioHostRoute, isPortfolioHost } from '@/lib/site-routing'
 
 export async function updateSession(request: NextRequest) {
+  const host = request.headers.get('host')
+
+  // rosiequintana.com only ever shows the public portfolio. Nobody signs in
+  // there, so skip Supabase entirely and hand scheduler pages to their own domain.
+  if (isPortfolioHost(host)) {
+    const decision = decidePortfolioHostRoute({
+      pathname: request.nextUrl.pathname,
+      search: request.nextUrl.search,
+    })
+    return decision.type === 'redirect'
+      ? NextResponse.redirect(decision.to)
+      : NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   })
@@ -37,17 +52,20 @@ export async function updateSession(request: NextRequest) {
 
   const user = data?.claims
 
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth') &&
-    !request.nextUrl.pathname.startsWith('/api/cron') &&
-    !request.nextUrl.pathname.startsWith('/api/webhooks')
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
+  // Public portfolio pages need no session; everything else still does.
+  const decision = decideAppHostRoute({
+    host,
+    pathname: request.nextUrl.pathname,
+    signedIn: Boolean(user),
+  })
+
+  if (decision.type === 'redirect') {
     const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
+    url.pathname = decision.to
+    const redirectResponse = NextResponse.redirect(url)
+    // A signed-in redirect must carry any session cookies refreshed above.
+    supabaseResponse.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie))
+    return redirectResponse
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're

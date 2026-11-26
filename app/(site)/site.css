@@ -1,0 +1,159 @@
+/* Public pages: the acting portfolio (rosiequintana.com) and the lessons page.
+   Scoped to .rq-site so nothing here touches the scheduler's own screens.
+   Colours are R G B triplets so Tailwind opacity modifiers (bg-rq-ink/10) work.
+
+   The look is "The Call Sheet": a plain, cool page set like a theatre
+   programme, with one red taken from Rosie's headshot. Stage photos and
+   videos sit on a near-black "house" band so the lighting in them glows. */
+
+.rq-site {
+  --rq-paper: 245 245 242;
+  --rq-ink: 20 21 26;
+  --rq-muted: 90 93 102;
+  --rq-rule: 217 217 212;
+  --rq-accent: 179 18 31;
+  --rq-on-accent: 255 255 255;
+
+  /* The house band keeps these values in both themes. */
+  --rq-house: 16 17 22;
+  --rq-house-ink: 245 245 242;
+  --rq-house-muted: 185 187 194;
+  --rq-house-rule: 52 54 63;
+
+  font-family: var(--font-plex), system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: rgb(var(--rq-ink));
+  background: rgb(var(--rq-paper));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.dark .rq-site {
+  --rq-paper: 27 28 35;
+  --rq-ink: 240 240 236;
+  --rq-muted: 172 175 184;
+  --rq-rule: 60 62 72;
+  --rq-accent: 238 98 106;
+  --rq-on-accent: 20 21 26;
+}
+
+/* Condensed bold capitals: her name, section headings, role names. */
+.rq-site .rq-display {
+  font-family: var(--font-archivo), 'Arial Narrow', sans-serif;
+  font-stretch: 62%;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.015em;
+  line-height: 0.92;
+}
+.rq-site .rq-role {
+  font-family: var(--font-archivo), 'Arial Narrow', sans-serif;
+  font-stretch: 62%;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+}
+
+/* Small uppercase labels above columns and fields. */
+.rq-site .rq-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(var(--rq-muted));
+}
+
+.rq-site ::selection {
+  background: rgb(var(--rq-accent));
+  color: rgb(var(--rq-on-accent));
+}
+
+.rq-site :focus-visible {
+  outline: 2px solid rgb(var(--rq-accent));
+  outline-offset: 3px;
+}
+.rq-site .rq-house :focus-visible {
+  outline-color: rgb(var(--rq-house-ink));
+}
+
+/* Running-text links */
+.rq-site .rq-link {
+  color: rgb(var(--rq-accent));
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+.rq-site .rq-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* Buttons: square, programme-plain. */
+.rq-site .rq-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.875rem;
+  padding: 0.7rem 1.1rem;
+  border: 1.5px solid rgb(var(--rq-ink));
+  background: transparent;
+  color: rgb(var(--rq-ink));
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+.rq-site .rq-button:hover {
+  background: rgb(var(--rq-ink));
+  color: rgb(var(--rq-paper));
+}
+.rq-site .rq-button-solid {
+  border-color: rgb(var(--rq-accent));
+  background: rgb(var(--rq-accent));
+  color: rgb(var(--rq-on-accent));
+}
+.rq-site .rq-button-solid:hover {
+  border-color: rgb(var(--rq-ink));
+  background: rgb(var(--rq-ink));
+  color: rgb(var(--rq-paper));
+}
+.rq-site .rq-button:disabled {
+  opacity: 0.6;
+}
+
+/* Form fields. The scheduler's global input rules use element + attribute
+   selectors, so these need the extra class to win in both themes. */
+.rq-site .rq-form .rq-field {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid rgb(var(--rq-ink) / 0.45);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: rgb(var(--rq-ink));
+  font: inherit;
+  font-size: 1rem;
+  transition: border-color 150ms ease;
+}
+.rq-site .rq-form textarea.rq-field {
+  resize: vertical;
+  min-height: 7.5rem;
+}
+.rq-site .rq-form .rq-field:focus {
+  outline: none;
+  border-color: rgb(var(--rq-ink));
+  box-shadow: 0 0 0 1px rgb(var(--rq-ink));
+}
+.rq-site .rq-form .rq-field[aria-invalid='true'] {
+  border-color: rgb(var(--rq-accent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rq-site * {
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -11,6 +11,7 @@ import {
   FORGOT_PASSWORD_PATH,
   RESET_PASSWORD_PATH,
 } from '@/lib/auth-email'
+import { DASHBOARD_PATH } from '@/lib/site-routing'
 
 // Derive the site URL from the actual request so confirmation/OAuth links
 // are correct in every environment (localhost, preview, production), instead
@@ -47,7 +48,7 @@ export async function signInWithEmail(formData: FormData) {
     redirect(`/login?message=${encodeURIComponent(message)}`)
   }
 
-  redirect('/')
+  redirect(DASHBOARD_PATH)
 }
 
 export async function signUpWithEmail(formData: FormData) {
@@ -187,7 +188,7 @@ export async function resetPassword(formData: FormData) {
     redirect(`${RESET_PASSWORD_PATH}?message=${encodeURIComponent(error.message)}`)
   }
 
-  redirect('/')
+  redirect(DASHBOARD_PATH)
 }
 
 export async function signInWithGoogle() {
