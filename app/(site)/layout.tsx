@@ -1,15 +1,25 @@
 import type { Metadata } from 'next';
-import { Archivo, IBM_Plex_Sans } from 'next/font/google';
+import localFont from 'next/font/local';
 import { PORTFOLIO_ORIGIN } from '@/lib/site-routing';
 import './site.css';
 
-// Archivo's width axis gives the condensed capitals; Plex Sans is the reading face.
-const archivo = Archivo({ subsets: ['latin'], axes: ['wdth'], variable: '--font-archivo', display: 'swap' });
-const plex = IBM_Plex_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
+// Both faces are self-hosted from ./fonts (see the README there) so the build
+// never has to fetch from Google. Archivo's width axis gives the condensed
+// capitals; Plex Sans is the reading face.
+const archivo = localFont({
+  src: './fonts/archivo-latin-variable.woff2',
+  weight: '100 900',
+  declarations: [{ prop: 'font-stretch', value: '62% 125%' }],
+  variable: '--font-archivo',
+  display: 'swap',
+  fallback: ['Arial Narrow', 'sans-serif'],
+});
+const plex = localFont({
+  src: './fonts/ibm-plex-sans-latin-variable.woff2',
+  weight: '100 700',
   variable: '--font-plex',
   display: 'swap',
+  fallback: ['system-ui', 'sans-serif'],
 });
 
 const description =
