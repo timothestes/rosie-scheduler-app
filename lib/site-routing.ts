@@ -1,8 +1,9 @@
 // Routing rules for serving two things from one deployment:
 //
-//  - Rosie's public portfolio (Home, Coaching, Media), which is what
-//    rosiequintana.com shows, and
-//  - the lesson scheduler, which lives at rosielessons.com and is where every
+//  - Rosie's acting portfolio (Home, Media), which is what rosiequintana.com
+//    shows, and
+//  - everything to do with lessons: the public Coaching page and the lesson
+//    scheduler, which live at rosielessons.com. That is also where every
 //    login, auth callback and booking link is configured to land.
 //
 // Pure functions only (no Next.js or Supabase imports) so the proxy can call
@@ -25,8 +26,11 @@ export const SCHEDULER_ORIGIN = (
 /** Signed-in users land here; it forwards to /admin or /schedule by role. */
 export const DASHBOARD_PATH = '/dashboard';
 
-// Exact paths anyone may request: the pages, the contact endpoint, SEO files.
-const PUBLIC_PATHS = ['/', '/coaching', '/media', '/api/contact', '/sitemap.xml', '/robots.txt'];
+// The acting portfolio: what rosiequintana.com serves.
+const PORTFOLIO_PATHS = ['/', '/media', '/api/contact', '/sitemap.xml', '/robots.txt'];
+// The lessons page. Public, but it belongs to the scheduler's domain, so a
+// portfolio host forwards it there like any other scheduler path.
+const LESSONS_PATHS = ['/coaching'];
 // Everything in public/site (photos are skipped by the proxy matcher, PDFs are not).
 const PUBLIC_ASSET_PREFIX = '/site/';
 
@@ -55,16 +59,22 @@ function stripTrailingSlash(pathname: string): string {
   return pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
 }
 
-/** Pages and files anyone may see without signing in. */
-export function isPublicSitePath(pathname: string): boolean {
+/** What a portfolio host serves itself: the acting pages and their assets. */
+export function isPortfolioPath(pathname: string): boolean {
   return (
-    PUBLIC_PATHS.includes(stripTrailingSlash(pathname)) || pathname.startsWith(PUBLIC_ASSET_PREFIX)
+    PORTFOLIO_PATHS.includes(stripTrailingSlash(pathname)) || pathname.startsWith(PUBLIC_ASSET_PREFIX)
   );
+}
+
+/** Pages and files anyone may see without signing in, on any other host. */
+export function isPublicSitePath(pathname: string): boolean {
+  return isPortfolioPath(pathname) || LESSONS_PATHS.includes(stripTrailingSlash(pathname));
 }
 
 /**
  * Decision for a request on a portfolio host, where nobody is ever signed in:
- * portfolio pages are served, everything else belongs to the scheduler.
+ * the acting pages are served, everything else (the lessons page included)
+ * belongs to the scheduler's domain.
  */
 export function decidePortfolioHostRoute(input: {
   pathname: string;
@@ -73,7 +83,7 @@ export function decidePortfolioHostRoute(input: {
 }): RouteDecision {
   const { pathname, search = '', schedulerOrigin = SCHEDULER_ORIGIN } = input;
   // Framework internals (RSC payloads, chunks) are served from whichever host asked.
-  if (isPublicSitePath(pathname) || pathname.startsWith('/_next/')) return NEXT;
+  if (isPortfolioPath(pathname) || pathname.startsWith('/_next/')) return NEXT;
   return { type: 'redirect', to: `${schedulerOrigin}${pathname}${search}` };
 }
 

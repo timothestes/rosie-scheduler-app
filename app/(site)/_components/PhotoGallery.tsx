@@ -10,8 +10,9 @@ const COLUMNS = {
 } as const;
 
 /**
- * Production photos with their programme credits. Selecting a photo opens it
- * large in a native <dialog>, with arrow-key and button navigation.
+ * Production photos with their programme credits, for the dark "house" band.
+ * Selecting a photo opens it large in a native <dialog>, with arrow-key and
+ * button navigation.
  */
 export default function PhotoGallery({
   photos,
@@ -55,7 +56,7 @@ export default function PhotoGallery({
                 type="button"
                 onClick={() => open(i)}
                 aria-label={`View larger: ${photo.title}`}
-                className="group block w-full overflow-hidden bg-rq-paper-deep"
+                className="group block w-full overflow-hidden bg-black"
               >
                 <Image
                   src={photo.src}
@@ -67,12 +68,12 @@ export default function PhotoGallery({
                       ? '(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 92vw'
                       : '(min-width: 640px) 45vw, 92vw'
                   }
-                  className="h-auto w-full transition-transform duration-700 ease-out group-hover:scale-[1.03]"
+                  className="h-auto w-full transition-opacity duration-200 group-hover:opacity-90"
                 />
               </button>
               <figcaption className="mt-3">
-                <p className="font-display text-xl leading-snug text-rq-ink">{photo.title}</p>
-                <p className="mt-1 text-sm leading-relaxed text-rq-muted">
+                <p className="rq-role text-[1.375rem] text-rq-house-ink">{photo.title}</p>
+                <p className="mt-1 text-sm leading-relaxed text-rq-house-muted">
                   {photo.credits.map((line, n) => (
                     <span key={line}>
                       {n > 0 && <span aria-hidden="true"> · </span>}
@@ -98,11 +99,11 @@ export default function PhotoGallery({
           if (event.key === 'ArrowRight') step(1);
           if (event.key === 'ArrowLeft') step(-1);
         }}
-        className="m-0 h-full max-h-none w-full max-w-none bg-[#140b0e]/[0.97] p-0 text-[#fff0ec] backdrop:bg-transparent"
+        className="m-0 h-full max-h-none w-full max-w-none bg-[#0b0c10]/[0.97] p-0 text-[#f5f5f2] backdrop:bg-transparent"
       >
         {current && index !== null && (
           <div className="pointer-events-none flex h-full flex-col px-4 pb-5 pt-4 sm:px-8">
-            <div className="pointer-events-auto flex items-center justify-between text-sm uppercase tracking-[0.2em]">
+            <div className="pointer-events-auto flex items-center justify-between text-sm font-medium">
               <p aria-live="polite">
                 {index + 1} / {photos.length}
               </p>
@@ -130,18 +131,18 @@ export default function PhotoGallery({
               <button
                 type="button"
                 onClick={() => step(-1)}
-                className="shrink-0 px-2 py-2 text-sm uppercase tracking-[0.2em] underline-offset-4 hover:underline"
+                className="shrink-0 px-2 py-2 text-sm font-medium underline-offset-4 hover:underline"
               >
                 <span aria-hidden="true">← </span>Previous
               </button>
               <div className="min-w-0 text-center">
-                <p className="font-display text-xl leading-snug">{current.title}</p>
-                <p className="mt-1 text-sm text-[#fff0ec]/80">{current.credits.join(' · ')}</p>
+                <p className="rq-role text-xl">{current.title}</p>
+                <p className="mt-1 text-sm text-[#f5f5f2]/80">{current.credits.join(' · ')}</p>
               </div>
               <button
                 type="button"
                 onClick={() => step(1)}
-                className="shrink-0 px-2 py-2 text-sm uppercase tracking-[0.2em] underline-offset-4 hover:underline"
+                className="shrink-0 px-2 py-2 text-sm font-medium underline-offset-4 hover:underline"
               >
                 Next<span aria-hidden="true"> →</span>
               </button>

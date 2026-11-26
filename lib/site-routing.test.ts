@@ -3,6 +3,7 @@ import {
   decideAppHostRoute,
   decidePortfolioHostRoute,
   isPortfolioHost,
+  isPortfolioPath,
   isPublicSitePath,
   isSchedulerHost,
   normalizeHost,
@@ -62,13 +63,30 @@ describe('isPublicSitePath', () => {
   });
 });
 
+describe('isPortfolioPath', () => {
+  it('covers the acting pages but not the lessons page', () => {
+    for (const path of ['/', '/media', '/media/', '/api/contact', '/site/hero.jpg', '/sitemap.xml']) {
+      expect(isPortfolioPath(path), path).toBe(true);
+    }
+    for (const path of ['/coaching', '/coaching/', '/schedule', '/login']) {
+      expect(isPortfolioPath(path), path).toBe(false);
+    }
+  });
+});
+
 describe('decidePortfolioHostRoute', () => {
   const schedulerOrigin = 'https://rosielessons.com';
 
-  it('serves portfolio pages', () => {
-    for (const pathname of ['/', '/coaching', '/media', '/api/contact', '/site/hero.jpg']) {
+  it('serves the acting pages', () => {
+    for (const pathname of ['/', '/media', '/api/contact', '/site/hero.jpg']) {
       expect(decidePortfolioHostRoute({ pathname, schedulerOrigin })).toEqual(next);
     }
+  });
+
+  it('forwards the lessons page to the lessons domain', () => {
+    expect(decidePortfolioHostRoute({ pathname: '/coaching', schedulerOrigin })).toEqual(
+      redirect('https://rosielessons.com/coaching')
+    );
   });
 
   it('sends scheduler pages to the scheduler domain, keeping path and query', () => {

@@ -1,8 +1,11 @@
-// Contact details, links and downloads shown on the public portfolio.
+// Contact details, links and downloads shown on the public pages.
 
 export const site = {
   name: 'Rosie Quintana',
   roles: ['Actor', 'Singer', 'Pianist'],
+  location: 'Santa Maria, CA',
+  // The line a casting person looks for first; all four are on her resume.
+  vitals: ['Mezzo with high belt, D3 to A5', '5\'8"', 'BMus vocal performance', 'PCPA acting certificate'],
   email: 'roselq42@gmail.com',
   phone: { display: '951-663-1304', href: 'tel:+19516631304' },
   social: [
@@ -16,8 +19,9 @@ export const site = {
     monthlyAgreement: '/site/files/monthly-lesson-agreement.pdf',
     individualAgreement: '/site/files/individual-lesson-agreement.pdf',
   },
-  // Scheduler pages. Plain <a> links, not next/link: on rosiequintana.com these
-  // leave for the scheduler's own domain (see lib/site-routing.ts).
+  // The lessons page and the scheduler. Plain <a> links, not next/link: on
+  // rosiequintana.com these leave for the lessons domain (see lib/site-routing.ts).
+  lessonsHref: '/coaching',
   bookingHref: '/schedule',
   loginHref: '/login',
 } as const;

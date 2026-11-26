@@ -7,7 +7,7 @@ import { site } from '../_content/site';
 type Status = 'idle' | 'sending' | 'sent' | 'failed';
 type FieldErrors = Partial<Record<ContactField, string>>;
 
-const labelClass = 'block text-[0.75rem] font-medium uppercase tracking-[0.2em] text-rq-muted';
+const labelClass = 'rq-label block';
 
 export default function ContactForm({
   topic = 'general',
@@ -58,8 +58,8 @@ export default function ContactForm({
 
   if (status === 'sent') {
     return (
-      <div role="status" className="border-t border-rq-ink/20 pt-8">
-        <p className="font-display text-3xl leading-tight text-rq-ink">Thank you. Your message is on its way.</p>
+      <div role="status" className="border-t-2 border-rq-ink pt-6">
+        <p className="rq-display text-[2rem] text-rq-ink">Thank you. Your message is on its way.</p>
         <p className="mt-3 text-rq-muted">{sentMessage}</p>
       </div>
     );
@@ -70,7 +70,7 @@ export default function ContactForm({
     name,
     'aria-invalid': errors[name] ? (true as const) : undefined,
     'aria-describedby': errors[name] ? `contact-${topic}-${name}-error` : undefined,
-    className: 'rq-field mt-1',
+    className: 'rq-field mt-2',
   });
 
   const errorFor = (name: ContactField) =>
@@ -81,7 +81,7 @@ export default function ContactForm({
     ) : null;
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="rq-form grid grid-cols-1 gap-x-8 gap-y-7 sm:grid-cols-2">
+    <form onSubmit={handleSubmit} noValidate className="rq-form grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
       <div>
         <label htmlFor={`contact-${topic}-firstName`} className={labelClass}>
           First name
@@ -126,7 +126,7 @@ export default function ContactForm({
         <button
           type="submit"
           disabled={status === 'sending'}
-          className="bg-rq-accent px-7 py-3 text-[0.8rem] font-medium uppercase tracking-[0.2em] text-rq-on-accent transition-opacity hover:opacity-85 disabled:opacity-60"
+          className="rq-button rq-button-solid"
         >
           {status === 'sending' ? 'Sending…' : submitLabel}
         </button>
